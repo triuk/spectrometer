@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="dark light">
   <title>Webový spektrometr – prototyp</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="camera-controls.css">
 </head>
 <body>
   <header class="app-header">
@@ -23,12 +24,7 @@
   <main class="app-grid">
     <section class="panel controls-panel" aria-labelledby="camera-heading">
       <h2 id="camera-heading">Kamera</h2>
-
-      <label for="cameraSelect">Zařízení</label>
-      <div class="inline-control">
-        <select id="cameraSelect"></select>
-        <button id="refreshDevicesButton" type="button" class="button secondary">Obnovit</button>
-      </div>
+      <p class="hint">Po stisknutí tlačítka vybereš kameru v dialogu Chromia.</p>
 
       <div class="field-grid compact">
         <label>
@@ -60,8 +56,24 @@
       </div>
 
       <p class="hint">
-        Prohlížeč neumí vynutit V4L2 formát YUYV. Skutečné nastavení je po spuštění zobrazeno v diagnostice.
+        Prohlížeč neumí vynutit V4L2 formát YUYV. Skutečné rozlišení, FPS a další hodnoty jsou uvedeny v diagnostice.
       </p>
+
+      <hr>
+
+      <section aria-labelledby="camera-controls-heading">
+        <div class="panel-heading-row compact-heading">
+          <div>
+            <h2 id="camera-controls-heading">Nastavení obrazu</h2>
+            <p class="hint">Zobrazeny jsou pouze parametry, které vybraná kamera zpřístupní prohlížeči.</p>
+          </div>
+          <button id="manualModeButton" type="button" class="button ghost" disabled>Manuální režim</button>
+        </div>
+        <div id="cameraControls" class="camera-controls">
+          <p class="hint">Nastavení se načte po spuštění kamery.</p>
+        </div>
+        <p id="controlStatus" class="hint" aria-live="polite"></p>
+      </section>
 
       <hr>
 
@@ -142,7 +154,7 @@
         <div class="panel-heading-row">
           <div>
             <h2 id="plot-heading">Spektrum</h2>
-            <p id="plotDescription" class="hint">Osa X: pixel / kalibrovaná vlnová délka. Osa Y: relativní intenzita.</p>
+            <p class="hint">Osa X: pixel nebo kalibrovaná vlnová délka. Osa Y: relativní intenzita.</p>
           </div>
           <output id="peakOutput" class="data-badge">Maximum: –</output>
         </div>
@@ -166,6 +178,6 @@
   </main>
 
   <canvas id="captureCanvas" hidden></canvas>
-  <script src="app.js" defer></script>
+  <script type="module" src="main.js"></script>
 </body>
 </html>
