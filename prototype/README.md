@@ -1,45 +1,45 @@
 # Webový spektrometr – prototyp
 
-První čistě webový prototyp zpracování obrazu z USB spektrometru. Nevyžaduje sestavení ani instalaci JavaScriptových balíčků.
-
-## Funkce
-
-- výběr kamery přes `MediaDevices.getUserMedia()`;
-- požadavek na rozlišení a snímkovou frekvenci;
-- zobrazení skutečného nastavení a schopností kamery;
-- interaktivní výběr obdélníkové oblasti spektra;
-- zprůměrování řádků oblasti na jednorozměrné spektrum;
-- kanály R, G, B a jas `0.299R + 0.587G + 0.114B`;
-- klouzavý průměr více snímků;
-- zachycení a odečet tmavého spektra;
-- lineární dvoubodová kalibrace pixel → nm;
-- živý graf a detekce maxima;
-- export CSV s metadaty;
-- uložení aktuálního snímku jako PNG.
+Čistě webový prototyp pro USB kameru připojenou k optickému spektroskopu. Neobsahuje build systém ani externí knihovny.
 
 ## Spuštění
 
-Přístup ke kameře vyžaduje zabezpečený kontext. Pro lokální provoz stačí `localhost`:
+V této složce spusť lokální HTTP server:
 
 ```bash
-cd prototype
 python -m http.server 8000
 ```
 
-Potom otevřete:
+Potom otevři `http://localhost:8000` v Chromiu. Po stisknutí **Spustit kameru** vyber požadovanou kameru v dialogu prohlížeče.
 
-```text
-http://localhost:8000
-```
+## Funkce
 
-Při prvním spuštění povolte přístup ke kameře a vyberte zařízení `USB 2.0 Camera: USB-ZH`.
+- požadavek na rozlišení a snímkovou frekvenci;
+- živý náhled kamery;
+- výběr oblasti spektra tažením myší;
+- průměrování pixelů ve svislém směru;
+- R, G, B a jasové spektrum;
+- klouzavé průměrování více snímků;
+- zachycení a odečet tmavého spektra;
+- lineární dvoubodová kalibrace pixel → nm;
+- živý graf a detekce maxima;
+- export CSV s metadaty a uložení PNG;
+- diagnostika `getSettings()` a `getCapabilities()`;
+- dynamické ovládání parametrů, které kamera zpřístupní prohlížeči, například ruční expozice, white balance, jas, kontrast, saturace a ostrost.
 
 ## Známá omezení
 
-- Prohlížeč neumí vynutit V4L2 formát YUYV místo MJPEG.
-- Ne všechny V4L2 ovládací prvky jsou dostupné přes webové kamerové API.
-- Jde o relativní intenzitu z již zpracovaného obrazu kamery, nikoli o surová Bayer data ani absolutní radiometrické měření.
+- Chromium vybírá kameru a způsob snímání. Webová aplikace neumí zaručit V4L2 formát YUYV místo MJPEG.
+- Dostupnost jednotlivých ovládacích prvků závisí na kombinaci kamery, ovladače a prohlížeče.
+- Hodnoty získané přes `<video>` a `<canvas>` jsou již zpracované kamerou/prohlížečem a nejsou RAW hodnotami senzoru.
 - Kalibrace je zatím pouze lineární a dvoubodová.
-- Prototyp nebyl kalibrován proti známému zdroji spektrálních čar.
+- Prototyp nebyl validován jako metrologický software.
 
-Pro reprodukovatelné měření bude pravděpodobně následovat lokální backend pro přesný výběr V4L2 formátu a ruční ovládání expozice.
+## Doporučený test
+
+1. Spusť kameru v režimu 1920 × 1080 a 5 fps.
+2. Přepni expozici a white balance do manuálního režimu.
+3. Zkontroluj skutečné hodnoty v diagnostice.
+4. Vyber vodorovný pás obsahující spektrum.
+5. Bez světla zachyť pozadí.
+6. Nastav kalibrační body a exportuj CSV.
