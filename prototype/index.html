@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Webový spektrometr – prototyp</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Prototyp</p>
+      <h1>Webový spektrometr</h1>
+      <p class="subtitle">USB kamera → oblast spektra → živá spektrální křivka</p>
+    </div>
+    <div class="status-stack" aria-live="polite">
+      <span id="cameraStatus" class="status status-idle">Kamera není spuštěna</span>
+      <span id="frameStatus" class="status-note">–</span>
+    </div>
+  </header>
+
+  <main class="app-grid">
+    <section class="panel controls-panel" aria-labelledby="camera-heading">
+      <h2 id="camera-heading">Kamera</h2>
+
+      <label for="cameraSelect">Zařízení</label>
+      <div class="inline-control">
+        <select id="cameraSelect"></select>
+        <button id="refreshDevicesButton" type="button" class="button secondary">Obnovit</button>
+      </div>
+
+      <div class="field-grid compact">
+        <label>
+          Požadovaná šířka
+          <input id="requestedWidth" type="number" min="160" step="1" value="1920">
+        </label>
+        <label>
+          Požadovaná výška
+          <input id="requestedHeight" type="number" min="120" step="1" value="1080">
+        </label>
+        <label>
+          Požadované FPS
+          <input id="requestedFps" type="number" min="1" max="60" step="1" value="5">
+        </label>
+        <label>
+          Interval výpočtu
+          <select id="processingInterval">
+            <option value="100">100 ms</option>
+            <option value="200" selected>200 ms</option>
+            <option value="500">500 ms</option>
+            <option value="1000">1 s</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button id="startButton" type="button" class="button primary">Spustit kameru</button>
+        <button id="stopButton" type="button" class="button secondary" disabled>Zastavit</button>
+      </div>
+
+      <p class="hint">
+        Prohlížeč neumí vynutit V4L2 formát YUYV. Skutečné nastavení je po spuštění zobrazeno v diagnostice.
+      </p>
+
+      <hr>
+
+      <h2>Zpracování</h2>
+      <label>
+        Průměrovat snímků
+        <input id="averageFrames" type="number" min="1" max="64" step="1" value="8">
+      </label>
+
+      <div class="checkbox-grid" aria-label="Zobrazené kanály">
+        <label><input id="showLuminance" type="checkbox" checked> Jas</label>
+        <label><input id="showRed" type="checkbox"> R</label>
+        <label><input id="showGreen" type="checkbox"> G</label>
+        <label><input id="showBlue" type="checkbox"> B</label>
+      </div>
+
+      <label class="checkbox-line">
+        <input id="subtractDark" type="checkbox" checked>
+        Odečítat zachycené tmavé spektrum
+      </label>
+
+      <div class="button-row">
+        <button id="captureDarkButton" type="button" class="button secondary" disabled>Zachytit pozadí</button>
+        <button id="clearDarkButton" type="button" class="button ghost" disabled>Zrušit pozadí</button>
+      </div>
+      <p id="darkStatus" class="hint">Tmavé spektrum není zachyceno.</p>
+
+      <hr>
+
+      <h2>Kalibrace</h2>
+      <p class="hint">Lineární dvoubodová kalibrace pixel → nm.</p>
+      <div class="field-grid compact">
+        <label>
+          Pixel 1
+          <input id="pixel1" type="number" step="0.1" value="0">
+        </label>
+        <label>
+          Vlnová délka 1 [nm]
+          <input id="wavelength1" type="number" step="0.1" value="400">
+        </label>
+        <label>
+          Pixel 2
+          <input id="pixel2" type="number" step="0.1" value="1919">
+        </label>
+        <label>
+          Vlnová délka 2 [nm]
+          <input id="wavelength2" type="number" step="0.1" value="700">
+        </label>
+      </div>
+      <button id="useRoiWidthButton" type="button" class="button ghost">Nastavit Pixel 2 podle ROI</button>
+
+      <hr>
+
+      <h2>Export</h2>
+      <div class="button-row wrap">
+        <button id="exportCsvButton" type="button" class="button secondary" disabled>Export CSV</button>
+        <button id="saveFrameButton" type="button" class="button secondary" disabled>Uložit snímek</button>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <section class="panel preview-panel" aria-labelledby="preview-heading">
+        <div class="panel-heading-row">
+          <div>
+            <h2 id="preview-heading">Náhled kamery</h2>
+            <p class="hint">Tažením myší označ oblast spektra. Dvojklik obnoví výchozí vodorovný pás.</p>
+          </div>
+          <output id="roiOutput" class="data-badge">ROI: –</output>
+        </div>
+        <div id="videoStage" class="video-stage">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlayCanvas" aria-label="Výběr oblasti spektra"></canvas>
+          <div id="videoPlaceholder" class="video-placeholder">Spusť kameru pro zobrazení obrazu.</div>
+        </div>
+      </section>
+
+      <section class="panel plot-panel" aria-labelledby="plot-heading">
+        <div class="panel-heading-row">
+          <div>
+            <h2 id="plot-heading">Spektrum</h2>
+            <p id="plotDescription" class="hint">Osa X: pixel / kalibrovaná vlnová délka. Osa Y: relativní intenzita.</p>
+          </div>
+          <output id="peakOutput" class="data-badge">Maximum: –</output>
+        </div>
+        <canvas id="plotCanvas" aria-label="Graf spektra"></canvas>
+      </section>
+
+      <details class="panel diagnostics-panel">
+        <summary>Diagnostika kamery</summary>
+        <div class="diagnostics-grid">
+          <div>
+            <h3>Aktuální nastavení</h3>
+            <pre id="settingsOutput">–</pre>
+          </div>
+          <div>
+            <h3>Dostupné schopnosti</h3>
+            <pre id="capabilitiesOutput">–</pre>
+          </div>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <canvas id="captureCanvas" hidden></canvas>
+  <script src="app.js" defer></script>
+</body>
+</html>
