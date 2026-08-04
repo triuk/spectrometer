@@ -1,0 +1,107 @@
+﻿    
+   
+    ' =============================================================================================
+    '  ARRAY FILTERING SEQUENCE
+    ' =============================================================================================
+    
+    Private Sub Bitmap_To_ReceivedSamples()
+    Friend Sub LinearSensor_To_ReceivedSamples()
+
+
+    Private Array_ReceivedSamples(-1) As Single
+    Private Array_AverageFiltered(-1) As Single
+    Private Array_UpDownFiltered(-1) As Single
+    Private Array_Calibrated(-1) As Single
+    Private Array_SpatialFiltered(-1) As Single
+    Private Array_VisibleSamples(-1) As Single
+
+
+    Friend Sub Spectrometer_ProcessReceivedSamples()
+        ' ----------------------------------------------------------- Add AVERAGE
+        Array_AverageFiltered(i) <-AVERAGE- Array_ReceivedSamples(i)
+        ' ----------------------------------------------------------- SpeedUP and SpeedDW
+        Array_UpDownFiltered(i) <-UP/DOWN- Array_AverageFiltered(i)
+        ' ----------------------------------------------------------- Show RECEIVED SAMPLES and SPECTRUM 
+        ShowReceivedSamples()
+        ShowSpectrumGraph()
+
+
+    Friend Sub Spectrometer_ShowSpectrumGraph()
+        ' ----------------------------------------------------------- ADD CALIBRATION
+        Array_UpDownFiltered_To_Array_Calibrated()
+        ' -----------------------------------------------------------
+        Prepare_VisibleSamples()
+
+
+    Private Sub Prepare_VisibleSamples()
+        ' ----------------------------------------------------------- Add SPATIAL FILTER
+        Array_Calibrated_To_Array_SpatialFiltered()
+        ' ----------------------------------------------------------- ADD BACKGROUND
+        AddBackground()
+        ' ----------------------------------------------------------- ADD REFERENCE
+        AddReference()
+        ' -----------------------------------------------------------
+        Array_VisibleSamples(i) <-- Array_SpatialFiltered(i + SrcX0)
+
+
+    Private Sub Add_SpatialFilter()
+        ' ----------------------------------------------------------- Add SPATIAL FILTER
+        Array_SpatialFiltered(i) <-SPATIAL-FILTER- Array_Calibrated(i)
+
+
+    ' --------------------------------------------------------------- BACKGROUND
+    Friend Sub Spectrometer_SetBackground()
+        Background = CType(Array_SpatialFiltered.Clone, Single())
+    Private Sub AddBackground()
+        Array_SpatialFiltered(i) = v
+        
+    ' --------------------------------------------------------------- REFERENCE 
+    Friend Sub Spectrometer_SetReference()
+        Reference = CType(Array_SpatialFiltered.Clone, Single())
+    Private Sub AddReference()
+        Array_SpatialFiltered(i) = v
+    
+    ' --------------------------------------------------------------- SAVE SPECTRUM FILE
+    Friend Sub SaveSpectrumFile
+        CreateDataStringFromArray(Array_SpatialFiltered)
+        
+    ' --------------------------------------------------------------- LOAD SPECTRUM FILE
+        Array_Calibrated(n) = CSng(Val(l(1)))
+        Array_UpDownFiltered = CType(Array_Calibrated.Clone, Single())
+        Array_ReceivedSamples(i) = CInt(Array_UpDownFiltered(i) / ScaleCoeff_to65536 + min)
+    
+    
+    
+    
+    ' ================================================================================
+    '  ADD REMOVE CALIBRATION - NON INTERPOLATED
+    ' ================================================================================
+    Private Sub Array_UpDownFiltered_To_Array_Calibrated()
+        ReDim Array_Calibrated(Array_UpDownFiltered.Length - 1)
+        For i As Int32 = 0 To Array_UpDownFiltered.Length - 1
+            Dim nm As Double = NanometersMin + (NanometersMax - NanometersMin) * i / Array_UpDownFiltered.Length
+            Dim bin As Int32 = CInt(Calib_NmToBin(nm))
+            If bin < 0 Then bin = 0
+            If bin > Array_UpDownFiltered.Length - 1 Then bin = Array_UpDownFiltered.Length - 1
+            Array_Calibrated(i) = Array_UpDownFiltered(bin)
+        Next
+    End Sub
+
+    ' UNUSED
+    Private Sub Array_Calibrated_To_Array_UpDownFiltered()
+        ReDim Array_UpDownFiltered(Array_Calibrated.Length - 1)
+        For i As Int32 = 0 To Array_Calibrated.Length - 1
+            Dim nm As Double = Calib_BinToNm(i)
+            Dim bin As Int32 = CInt((nm - NanometersMin) * Array_UpDownFiltered.Length / (NanometersMax - NanometersMin))
+            If bin < 0 Then bin = 0
+            If bin > Array_Calibrated.Length - 1 Then bin = Array_Calibrated.Length - 1
+            Array_UpDownFiltered(i) = Array_Calibrated(bin)
+        Next
+    End Sub
+    
+    
+    
+    
+    
+    
+   

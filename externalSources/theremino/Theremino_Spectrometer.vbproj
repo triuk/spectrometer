@@ -1,0 +1,269 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="3.5" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.30729</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{7558FD1B-8F8C-4587-8B71-EE9AD59A25BE}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <StartupObject>Theremino_Spectrometer.My.MyApplication</StartupObject>
+    <RootNamespace>Theremino_Spectrometer</RootNamespace>
+    <AssemblyName>Theremino_Spectrometer</AssemblyName>
+    <FileAlignment>512</FileAlignment>
+    <MyType>WindowsForms</MyType>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <OptionExplicit>On</OptionExplicit>
+    <OptionCompare>Binary</OptionCompare>
+    <OptionStrict>On</OptionStrict>
+    <OptionInfer>Off</OptionInfer>
+    <ApplicationIcon>ProjectFiles\Colors.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>false</DefineTrace>
+    <OutputPath>..\Theremino_Spectrometer\</OutputPath>
+    <NoWarn>
+    </NoWarn>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <UseVSHostingProcess>true</UseVSHostingProcess>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>None</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>..\Theremino_Spectrometer\</OutputPath>
+    <NoWarn>
+    </NoWarn>
+    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DefineDebug>true</DefineDebug>
+    <OutputPath>..\Theremino_Spectrometer\</OutputPath>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <DefineTrace>false</DefineTrace>
+    <OutputPath>..\Theremino_Spectrometer\</OutputPath>
+    <Optimize>false</Optimize>
+    <DebugType>None</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <WarningsAsErrors>41999,42016,42017,42018,42019,42020,42021,42022,42032,42036</WarningsAsErrors>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
+    <RemoveIntegerChecks>true</RemoveIntegerChecks>
+    <DebugSymbols>false</DebugSymbols>
+    <DefineDebug>false</DefineDebug>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="CustomControlsLib, Version=1.6.0.0, Culture=neutral, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>ProjectFiles\CustomControlsLib.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Design" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Import Include="Microsoft.VisualBasic" />
+    <Import Include="System" />
+    <Import Include="System.Collections" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Data" />
+    <Import Include="System.Drawing" />
+    <Import Include="System.Diagnostics" />
+    <Import Include="System.Linq" />
+    <Import Include="System.Management" />
+    <Import Include="System.Management.Instrumentation" />
+    <Import Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="ProjectFiles\Module_IrradianceCoeffs.vb" />
+    <Compile Include="ProjectFiles\ApplicationEvents.vb" />
+    <Compile Include="ProjectFiles\Class_ThereminoSlots.vb" />
+    <Compile Include="ProjectFiles\Class_ThereminoStrings.vb" />
+    <Compile Include="ProjectFiles\Class_VideoCapabilities.vb" />
+    <Compile Include="ProjectFiles\DirectShow\amstream.vb" />
+    <Compile Include="ProjectFiles\DirectShow\amvideo.vb" />
+    <Compile Include="ProjectFiles\DirectShow\atscpsipparser.vb" />
+    <Compile Include="ProjectFiles\DirectShow\austream.vb" />
+    <Compile Include="ProjectFiles\DirectShow\AxCore.vb" />
+    <Compile Include="ProjectFiles\DirectShow\AXExtend.vb" />
+    <Compile Include="ProjectFiles\DirectShow\BDAIface.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Bdatif.vb" />
+    <Compile Include="ProjectFiles\DirectShow\BDATypes.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Control.vb" />
+    <Compile Include="ProjectFiles\DirectShow\DES.vb" />
+    <Compile Include="ProjectFiles\DirectShow\DevEnum.vb" />
+    <Compile Include="ProjectFiles\DirectShow\DMODShow.vb" />
+    <Compile Include="ProjectFiles\DirectShow\dsattrib.vb" />
+    <Compile Include="ProjectFiles\DirectShow\DsUtils.vb" />
+    <Compile Include="ProjectFiles\DirectShow\dvbsiparser.vb" />
+    <Compile Include="ProjectFiles\DirectShow\DVDIf.vb" />
+    <Compile Include="ProjectFiles\DirectShow\DynGraph.vb" />
+    <Compile Include="ProjectFiles\DirectShow\encdec.vb" />
+    <Compile Include="ProjectFiles\DirectShow\EvCode.vb" />
+    <Compile Include="ProjectFiles\DirectShow\IL21Dec.vb" />
+    <Compile Include="ProjectFiles\DirectShow\MediaObj.vb" />
+    <Compile Include="ProjectFiles\DirectShow\MediaParam.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Misc.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Mixerocx.vb" />
+    <Compile Include="ProjectFiles\DirectShow\mmstream.vb" />
+    <Compile Include="ProjectFiles\DirectShow\mpconfig.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Mpeg2Data.vb" />
+    <Compile Include="ProjectFiles\DirectShow\mpeg2psiparser.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Mpeg2Structs.vb" />
+    <Compile Include="ProjectFiles\DirectShow\other.vb" />
+    <Compile Include="ProjectFiles\DirectShow\PlayList.vb" />
+    <Compile Include="ProjectFiles\DirectShow\QEdit.vb" />
+    <Compile Include="ProjectFiles\DirectShow\qnetwork.vb" />
+    <Compile Include="ProjectFiles\DirectShow\RegBag.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Sbe.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Tuner.vb" />
+    <Compile Include="ProjectFiles\DirectShow\TvRatings.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Uuids.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Vidcap.vb" />
+    <Compile Include="ProjectFiles\DirectShow\VidPort.vb" />
+    <Compile Include="ProjectFiles\DirectShow\Vmr9.vb" />
+    <Compile Include="ProjectFiles\DirectShow\VmRender.vb" />
+    <Compile Include="ProjectFiles\Form_Info.designer.vb">
+      <DependentUpon>Form_Info.vb</DependentUpon>
+    </Compile>
+    <Compile Include="ProjectFiles\Form_Info.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProjectFiles\Form1.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProjectFiles\Form1.Designer.vb">
+      <DependentUpon>Form1.vb</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProjectFiles\FormAbout.designer.vb">
+      <DependentUpon>FormAbout.vb</DependentUpon>
+    </Compile>
+    <Compile Include="ProjectFiles\FormAbout.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProjectFiles\Form_VideoInControls.Designer.vb">
+      <DependentUpon>Form_VideoInControls.vb</DependentUpon>
+    </Compile>
+    <Compile Include="ProjectFiles\Form_VideoInControls.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProjectFiles\Module_Calibrations.vb" />
+    <Compile Include="ProjectFiles\Module_COM.vb" />
+    <Compile Include="ProjectFiles\Module_DirectShow_EnumFilters.vb" />
+    <Compile Include="ProjectFiles\Module_DirectShow_GraphTools.vb" />
+    <Compile Include="ProjectFiles\Module_DirectShow_SampleGrabberCallback.vb" />
+    <Compile Include="ProjectFiles\Module_DirectShow_Utils.vb" />
+    <Compile Include="ProjectFiles\Module_DirectShow_VideoInput.vb" />
+    <Compile Include="ProjectFiles\Module_Utils_Images.vb" />
+    <Compile Include="ProjectFiles\Module_Spectrometer.vb" />
+    <Compile Include="ProjectFiles\Module_FileFunctions.vb" />
+    <Compile Include="ProjectFiles\Module_Program.vb" />
+    <Compile Include="ProjectFiles\Module_SaveLoad.vb" />
+    <Compile Include="ProjectFiles\Module_TextCommands.vb" />
+    <Compile Include="ProjectFiles\Module_Utils.vb" />
+    <Compile Include="ProjectFiles\Module_Watch_ArduinoIDE.vb" />
+    <Compile Include="My Project\AssemblyInfo.vb" />
+    <Compile Include="My Project\Application.Designer.vb">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Application.myapp</DependentUpon>
+    </Compile>
+    <Compile Include="My Project\Resources.Designer.vb">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="My Project\Settings.Designer.vb">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+    <Compile Include="ProjectFiles\Utils_LocaleNames.vb" />
+    <Compile Include="ProjectFiles\Class_PrecisionTimer.vb" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ProjectFiles\Form_Info.resx">
+      <DependentUpon>Form_Info.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ProjectFiles\Form1.resx">
+      <DependentUpon>Form1.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ProjectFiles\FormAbout.resx">
+      <DependentUpon>FormAbout.vb</DependentUpon>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="My Project\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.vb</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="My Project\Application.myapp">
+      <Generator>MyApplicationCodeGenerator</Generator>
+      <LastGenOutput>Application.Designer.vb</LastGenOutput>
+    </None>
+    <None Include="My Project\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <CustomToolNamespace>My</CustomToolNamespace>
+      <LastGenOutput>Settings.Designer.vb</LastGenOutput>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ProjectFiles\CustomControlsLib.dll" />
+    <EmbeddedResource Include="ProjectFiles\Form_VideoInControls.resx">
+      <DependentUpon>Form_VideoInControls.vb</DependentUpon>
+    </EmbeddedResource>
+    <Content Include="ProjectFiles\Colors.ico" />
+    <None Include="ProjectFiles\Sounds\ComClose.wav" />
+    <None Include="ProjectFiles\Sounds\ComClose2.wav" />
+    <None Include="ProjectFiles\Sounds\ComOpen.wav" />
+    <None Include="ProjectFiles\Sounds\Success2.wav" />
+    <Content Include="ProjectFiles\Annotations.txt" />
+    <None Include="ProjectFiles\Sounds\Laser.wav" />
+    <None Include="ProjectFiles\Sounds\HonkHonk.wav" />
+    <None Include="ProjectFiles\Sounds\Click3a.wav" />
+    <None Include="ProjectFiles\Sounds\Click2c.wav" />
+    <None Include="ProjectFiles\Sounds\Click2b.wav" />
+    <None Include="ProjectFiles\Sounds\Click2a.wav" />
+    <None Include="ProjectFiles\Sounds\bepbeep.wav" />
+    <None Include="ProjectFiles\Resources\Success2.wav" />
+    <None Include="ProjectFiles\Resources\Laser.wav" />
+    <None Include="ProjectFiles\Resources\HonkHonk.wav" />
+    <None Include="ProjectFiles\Resources\bepbeep.wav" />
+    <None Include="ProjectFiles\Resources\Click2b.wav" />
+    <None Include="ProjectFiles\Resources\Click2a.wav" />
+    <None Include="ProjectFiles\Resources\Click3a.wav" />
+    <None Include="ProjectFiles\Resources\Click2c.wav" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="obj\" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

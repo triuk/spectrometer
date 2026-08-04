@@ -1,0 +1,11 @@
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Theremino_Spectrometer\Theremino_Spectrometer.exe
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Theremino_Spectrometer\Theremino_Spectrometer.pdb
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\ResolveAssemblyReference.cache
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.FormInfo.resources
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.Form1.resources
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.FormAbout.resources
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.Resources.resources
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.Form_VideoInControls.resources
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.vbproj.GenerateResource.Cache
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.exe
+C:\Livio\Sistema_Theremino\Theremino_SpectroSensors\Theremino_Spectrometer_V4.0.1\Sources\obj\Debug\Theremino_Spectrometer.pdb
