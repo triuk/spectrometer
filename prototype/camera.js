@@ -18,6 +18,57 @@ import {
   stopProcessing,
 } from "./spectrum.js";
 
+const TARGET_CAMERA_LABEL = /USB 2\.0 Camera: USB-ZH/i;
+const SAVED_DEVICE_KEY = "spectrometer.cameraDeviceId";
+
+const CAPTURE_PROFILES = [
+  {
+    id: "optimal",
+    label: "Optimální",
+    constraints: {
+      width: { exact: 1920 },
+      height: { exact: 1080 },
+      frameRate: { exact: 5 },
+    },
+  },
+  {
+    id: "full-hd-fallback",
+    label: "Fallback Full HD",
+    constraints: {
+      width: { exact: 1920 },
+      height: { exact: 1080 },
+      frameRate: { ideal: 5 },
+    },
+  },
+  {
+    id: "1280x960-fallback",
+    label: "Fallback 1280 × 960",
+    constraints: {
+      width: { exact: 1280 },
+      height: { exact: 960 },
+      frameRate: { ideal: 6 },
+    },
+  },
+  {
+    id: "1280x720-fallback",
+    label: "Fallback 1280 × 720",
+    constraints: {
+      width: { exact: 1280 },
+      height: { exact: 720 },
+      frameRate: { ideal: 9 },
+    },
+  },
+  {
+    id: "automatic-fallback",
+    label: "Automatický fallback",
+    constraints: {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 5 },
+    },
+  },
+];
+
 const MODE_CONTROLS = [
   ["exposureMode", "Režim expozice"],
   ["whiteBalanceMode", "White balance"],
@@ -31,17 +82,6 @@ const NUMERIC_CONTROLS = [
   ["saturation", "Saturace"],
   ["sharpness", "Ostrost"],
 ];
-
-function buildVideoConstraints() {
-  return {
-    audio: false,
-    video: {
-      width: { ideal: Math.max(160, toFiniteNumber(elements.requestedWidth.value, 1920)) },
-      height: { ideal: Math.max(120, toFiniteNumber(elements.requestedHeight.value, 1080)) },
-      frameRate: { ideal: clamp(toFiniteNumber(elements.requestedFps.value, 5), 1, 60) },
-    },
-  };
-}
 
 function getCapabilities(track) {
   try {
@@ -57,15 +97,96 @@ async function waitForMetadata() {
   await new Promise((resolve) => elements.video.addEventListener("loadedmetadata", resolve, { once: true }));
 }
 
+async function requestCameraStream() {
+  const savedDeviceId = localStorage.getItem(SAVED_DEVICE_KEY);
+  if (savedDeviceId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { deviceId: { exact: savedDeviceId } },
+      });
+    } catch (error) {
+      console.warn("Saved camera is unavailable; falling back to the browser chooser.", error);
+      localStorage.removeItem(SAVED_DEVICE_KEY);
+    }
+  }
+
+  return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+}
+
+async function selectBestCaptureProfile(track) {
+  for (const profile of CAPTURE_PROFILES) {
+    try {
+      await track.applyConstraints(profile.constraints);
+      return profile;
+    } catch (error) {
+      console.warn(`Capture profile ${profile.id} is unavailable.`, error);
+    }
+  }
+
+  return {
+    id: "browser-default",
+    label: "Výchozí režim prohlížeče",
+    constraints: {},
+  };
+}
+
+function isOptimalCapture(profile, settings, label) {
+  const frameRate = Number(settings.frameRate);
+  return profile.id === "optimal"
+    && TARGET_CAMERA_LABEL.test(label)
+    && settings.width === 1920
+    && settings.height === 1080
+    && Number.isFinite(frameRate)
+    && Math.abs(frameRate - 5) < 0.15;
+}
+
+function renderCaptureMode(profile) {
+  const settings = state.track?.getSettings() ?? {};
+  const label = state.track?.label || "Neznámá kamera";
+  const optimal = isOptimalCapture(profile, settings, label);
+  const frameRate = Number(settings.frameRate);
+
+  elements.captureModeStatus.className = `capture-mode capture-mode-${optimal ? "optimal" : "fallback"}`;
+  elements.captureModeBadge.textContent = optimal ? "Optimální" : "Fallback";
+  elements.captureCameraName.textContent = label;
+  elements.captureResolution.textContent = settings.width && settings.height
+    ? `${settings.width} × ${settings.height}`
+    : "Nezjištěno";
+  elements.captureFrameRate.textContent = Number.isFinite(frameRate)
+    ? `${frameRate.toFixed(frameRate % 1 ? 2 : 0)} fps`
+    : "Nezjištěno";
+  elements.captureFormat.textContent = "Nezjištěno – Chromium údaj neposkytuje";
+  elements.captureModeStatus.title = optimal
+    ? "Kamera běží v cílovém režimu 1920 × 1080 při 5 fps."
+    : `Použit náhradní režim: ${profile.label}.`;
+}
+
+function resetCaptureMode() {
+  elements.captureModeStatus.className = "capture-mode capture-mode-idle";
+  elements.captureModeBadge.textContent = "Čeká";
+  elements.captureCameraName.textContent = "–";
+  elements.captureResolution.textContent = "–";
+  elements.captureFrameRate.textContent = "–";
+  elements.captureFormat.textContent = "–";
+  elements.captureModeStatus.removeAttribute("title");
+}
+
 export async function startCamera() {
   stopCamera();
-  setCameraStatus("Čekám na výběr kamery…");
+  setCameraStatus("Čekám na kameru…");
 
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("MediaDevices API není dostupné.");
-    state.stream = await navigator.mediaDevices.getUserMedia(buildVideoConstraints());
+
+    state.stream = await requestCameraStream();
     state.track = state.stream.getVideoTracks()[0];
+    state.captureProfile = await selectBestCaptureProfile(state.track);
     state.capabilities = getCapabilities(state.track);
+
+    const settings = state.track.getSettings();
+    if (settings.deviceId) localStorage.setItem(SAVED_DEVICE_KEY, settings.deviceId);
+
     elements.video.srcObject = state.stream;
     await elements.video.play();
     await waitForMetadata();
@@ -74,6 +195,7 @@ export async function startCamera() {
     elements.videoStage.style.aspectRatio = `${elements.video.videoWidth} / ${elements.video.videoHeight}`;
     initialiseDefaultRoi();
     clearProcessingState();
+    renderCaptureMode(state.captureProfile);
     renderCameraControls();
     updateDiagnostics();
     startProcessingLoop();
@@ -101,6 +223,7 @@ export function stopCamera() {
     stream: null,
     track: null,
     capabilities: {},
+    captureProfile: null,
     roi: null,
     dragStart: null,
     spectrumHistory: [],
@@ -116,6 +239,7 @@ export function stopCamera() {
   elements.controlStatus.textContent = "";
   elements.roiOutput.textContent = "ROI: –";
   elements.peakOutput.textContent = "Maximum: –";
+  resetCaptureMode();
   setCameraStatus("Kamera není spuštěna");
   setRunningControls(false);
   clearOverlay();
