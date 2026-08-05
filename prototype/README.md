@@ -8,26 +8,29 @@ Aplikace se snaží otevřít kameru v režimu 1920 × 1080 při 5 fps. Pokud c�
 
 ## Nastavení obrazu
 
-Kamera při měření běží fyzicky v ručním režimu. Hardwarová automatická expozice a automatické vyvážení bílé se nepoužívají.
+Kamera při měření běží vždy v pevném ručním režimu. Hardwarová automatická expozice ani automatické vyvážení bílé se nepoužívají a v rozhraní už není přepínač Auto/Ručně.
 
-### Optimalizovat (SW)
+Po spuštění se nastaví pevné parametry vhodné pro opakovatelné měření:
 
-Tlačítko spustí jednorázovou softwarovou optimalizaci expozice:
+- ruční expozice;
+- ruční vyvážení bílé 4600 K;
+- jas 0;
+- kontrast 32;
+- saturace 50;
+- ostrost 1.
+
+Jas, kontrast, saturace a ostrost nejsou v běžném rozhraní dostupné. Jejich změny by ovlivňovaly intenzity, poměry barevných kanálů nebo tvar spektrálních čar.
+
+### Optimalizovat expozici (SW)
+
+Samostatné tlačítko spustí jednorázovou softwarovou optimalizaci pouze expozičního času:
 
 1. změří maximum barevných kanálů ve vybrané ROI;
 2. iterativně mění ruční expoziční čas;
 3. snaží se dostat maximum přibližně do rozsahu 205–232 z 255;
 4. po dosažení cíle expozici uzamkne.
 
-Optimalizace neběží průběžně, aby se během měření neměnilo měřítko intenzity. Při změně zdroje nebo optické sestavy ji lze spustit znovu tlačítkem **Optimalizovat (SW)**.
-
-Vyvážení bílé je při prvním spuštění optimalizace zafixováno na 4600 K. Pokud bylo před další optimalizací nastaveno ručně, zachová se aktuální ruční hodnota.
-
-Jas, kontrast, saturace a ostrost se automaticky nemění. Nejde o chybu: jejich průběžná optimalizace by měnila poměry kanálů, šířku spektrálních čar a tvar měřeného spektra. Pro opakovatelné měření musí zůstat pevné.
-
-### Ručně
-
-Tlačítko **Ručně** zastaví SW optimalizaci a zpřístupní ruční expoziční čas a teplotu bílé.
+Optimalizace neběží průběžně, aby se během měření neměnilo měřítko intenzity. Při změně zdroje nebo optické sestavy ji lze spustit znovu.
 
 ## Spektrum
 
