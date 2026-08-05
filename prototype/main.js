@@ -1,5 +1,6 @@
 import "./constraints-compat.js";
 import "./image-settings-style.js";
+import { installAutoReadoutClarity } from "./auto-readout-clarity.js";
 import { elements, setRunningControls } from "./core.js";
 import { startCamera, stopCamera } from "./camera.js";
 import { installCaptureStatusCorrection } from "./capture-status.js";
@@ -58,6 +59,7 @@ function bindEvents() {
 
 installCaptureStatusCorrection();
 installImageSettingsControls();
+installAutoReadoutClarity();
 bindEvents();
 setRunningControls(false);
 drawEmptyPlot();
