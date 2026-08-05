@@ -58,6 +58,8 @@ function keepSoftwareManagedCameraManual(constraints) {
 }
 
 function prepareConstraintSet(constraints) {
+  // Chromium odmítá kombinaci streamových a ImageCapture parametrů v jednom
+  // volání. V SW režimu navíc převádíme hardwarové continuous na manual.
   return keepSoftwareManagedCameraManual(sanitizeConstraintSet(constraints));
 }
 
