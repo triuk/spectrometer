@@ -1,3 +1,4 @@
+import { installExposureLimit } from "./exposure-limit.js";
 import { installExposureOptimizer } from "./exposure-optimizer.js";
 import { installMeasurementCameraMode } from "./measurement-camera-mode.js";
 
@@ -14,7 +15,11 @@ if (!document.querySelector(`link[href="${href}"]`)) {
 // Auto/Ručně; samostatné tlačítko pouze jednorázově optimalizuje expozici.
 document.documentElement.dataset.softwareAutoExposure = "manual-measurement";
 
-// Optimalizátor se instaluje jako první, aby jeho capture listener nahradil
-// starší monotónní algoritmus z measurement-camera-mode.js.
+// Nejdřív omezíme měřicí rozsah expozice na 1800 (180 ms). Optimalizátor
+// i ruční ovladače pak pracují se stejným bezpečným horním limitem.
+installExposureLimit();
+
+// Optimalizátor se instaluje před starší obsluhou tlačítka, aby jeho capture
+// listener nahradil monotónní algoritmus z measurement-camera-mode.js.
 installExposureOptimizer();
 installMeasurementCameraMode();
