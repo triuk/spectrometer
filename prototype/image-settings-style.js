@@ -1,5 +1,4 @@
-import { installSoftwareAutoExposure } from "./software-auto-exposure.js";
-import { installSoftwareAutoStart } from "./software-auto-start.js";
+import { installMeasurementCameraMode } from "./measurement-camera-mode.js";
 
 const href = new URL("./image-settings-layout.css", import.meta.url).href;
 
@@ -10,9 +9,8 @@ if (!document.querySelector(`link[href="${href}"]`)) {
   document.head.append(link);
 }
 
-// Hardwarové Auto se v tomto prototypu nepoužívá. Kamera zůstává fyzicky
-// v ručním režimu a tlačítko Auto spouští jednorázovou SW optimalizaci.
-document.documentElement.dataset.softwareAutoExposure = "managed";
+// Kamera zůstává vždy v ručním měřicím režimu. Neexistuje přepínač
+// Auto/Ručně; samostatné tlačítko pouze jednorázově optimalizuje expozici.
+document.documentElement.dataset.softwareAutoExposure = "manual-measurement";
 
-installSoftwareAutoExposure();
-installSoftwareAutoStart();
+installMeasurementCameraMode();
