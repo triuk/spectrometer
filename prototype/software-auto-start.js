@@ -24,10 +24,7 @@ function poll() {
   if (!startedForTrack && cameraReadyForOptimisation()) {
     startedForTrack = true;
     window.setTimeout(() => {
-      if (state.track === observedTrack
-          && document.documentElement.dataset.softwareAutoExposure !== "active") {
-        elements.autoModeButton.click();
-      }
+      if (state.track === observedTrack) elements.autoModeButton.click();
     }, 250);
   }
 }
