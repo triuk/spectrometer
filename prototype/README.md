@@ -4,31 +4,19 @@
 
 ## Spuštění
 
-V této složce spusť lokální HTTP server:
+Aplikace je dostupná přes GitLab Pages. Pro lokální vývoj lze v této složce spustit:
 
 ```bash
 python -m http.server 8000
 ```
 
-Potom otevři `http://localhost:8000` v Chromiu. Při prvním použití může Chromium vyžádat oprávnění nebo výběr kamery. Aplikace si následně uloží `deviceId` zvolené kamery a při dalších spuštěních ji otevře přímo, dokud zůstane identifikátor platný.
-
-## Automatický režim kamery
-
-Po stisknutí **Spustit kameru** aplikace postupně zkouší:
-
-1. 1920 × 1080 při přesně 5 fps — cílový režim;
-2. 1920 × 1080 s nejbližší dostupnou snímkovou frekvencí;
-3. 1280 × 960 přibližně při 6 fps;
-4. 1280 × 720 přibližně při 9 fps;
-5. automatický režim zvolený Chromiem.
-
-Cílový režim je označen zeleně. Jakýkoli náhradní režim je označen oranžově. Panel vždy uvádí skutečné rozlišení a FPS z `MediaStreamTrack.getSettings()`.
-
-Chromium neuvádí, zda vstupní V4L2 stream používá YUYV nebo MJPEG. Pole **Pixelový formát / komprese** proto zobrazuje, že hodnotu nelze zjistit, namísto nespolehlivého odhadu.
+Potom otevři `http://localhost:8000` v Chromiu.
 
 ## Funkce
 
 - automatický výběr nejlepšího dostupného režimu snímání;
+- kompaktní barevný stav režimu vedle ovládacích tlačítek;
+- podrobnosti o kameře, rozlišení, FPS, periodě snímku a pixelovém formátu po najetí myší nebo zaměření klávesnicí;
 - živý náhled kamery;
 - výběr oblasti spektra tažením myší;
 - průměrování pixelů ve svislém směru;
@@ -43,7 +31,8 @@ Chromium neuvádí, zda vstupní V4L2 stream používá YUYV nebo MJPEG. Pole **
 
 ## Známá omezení
 
-- Webová API neodhalují vstupní V4L2 pixelový formát ani kompresi.
+- Chromium vybírá kameru a způsob snímání. Webová aplikace neumí zaručit V4L2 formát YUYV místo MJPEG.
+- Chromium neposkytuje aplikaci použitý V4L2 pixelový formát / kompresi, proto je tento údaj označen jako nezjištěný.
 - Dostupnost jednotlivých ovládacích prvků závisí na kombinaci kamery, ovladače a prohlížeče.
 - Hodnoty získané přes `<video>` a `<canvas>` jsou již zpracované kamerou/prohlížečem a nejsou RAW hodnotami senzoru.
 - Kalibrace je zatím pouze lineární a dvoubodová.
@@ -51,9 +40,9 @@ Chromium neuvádí, zda vstupní V4L2 stream používá YUYV nebo MJPEG. Pole **
 
 ## Doporučený test
 
-1. Spusť kameru a zkontroluj zelený nebo oranžový panel režimu.
-2. Přepni expozici a white balance do manuálního režimu.
-3. Zkontroluj skutečné hodnoty v diagnostice.
+1. Spusť kameru a zkontroluj zelený stav **Optimální**.
+2. Najetím na stav ověř 1920 × 1080, 5 fps a 200 ms/snímek.
+3. Přepni expozici a white balance do manuálního režimu.
 4. Vyber vodorovný pás obsahující spektrum.
 5. Bez světla zachyť pozadí.
 6. Nastav kalibrační body a exportuj CSV.
