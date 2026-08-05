@@ -21,7 +21,9 @@ Tlačítko spustí jednorázovou softwarovou optimalizaci expozice:
 
 Optimalizace neběží průběžně, aby se během měření neměnilo měřítko intenzity. Při změně zdroje nebo optické sestavy ji lze spustit znovu tlačítkem **Automaticky (SW)**.
 
-Vyvážení bílé je při automatickém startu zafixováno na 4600 K. Pokud bylo před optimalizací nastaveno ručně, zachová se aktuální ruční hodnota. Jas, kontrast, saturace a ostrost se automaticky nemění, protože jejich změny by ovlivňovaly tvar a poměry spektra.
+Vyvážení bílé je při automatickém startu zafixováno na 4600 K. Pokud bylo před optimalizací nastaveno ručně, zachová se aktuální ruční hodnota.
+
+Jas, kontrast, saturace a ostrost se automaticky nemění. Nejde o chybu: jejich průběžná optimalizace by měnila poměry kanálů, šířku spektrálních čar a tvar měřeného spektra. Pro opakovatelné měření musí zůstat pevné.
 
 ### Ručně
 
