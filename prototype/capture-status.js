@@ -44,18 +44,18 @@ export function installCaptureStatusCorrection() {
     const nextFrameText = fps === null
       ? "Nezjištěno"
       : `${fps.toFixed(fps % 1 ? 2 : 0)} fps${period ? ` · ${period} ms/snímek` : ""}`;
+    const nextAriaLabel = optimal
+      ? "Optimální režim snímání. Podrobnosti zobrazíte najetím myší nebo zaměřením klávesnicí."
+      : "Náhradní režim snímání. Podrobnosti zobrazíte najetím myší nebo zaměřením klávesnicí.";
 
     updating = true;
     if (panel.className !== nextClass) panel.className = nextClass;
     if (badge.textContent !== nextBadge) badge.textContent = nextBadge;
     if (frameRate.textContent !== nextFrameText) frameRate.textContent = nextFrameText;
-    panel.removeAttribute("title");
-    panel.setAttribute(
-      "aria-label",
-      optimal
-        ? "Optimální režim snímání. Podrobnosti zobrazíte najetím myší nebo zaměřením klávesnicí."
-        : "Náhradní režim snímání. Podrobnosti zobrazíte najetím myší nebo zaměřením klávesnicí.",
-    );
+    if (panel.hasAttribute("title")) panel.removeAttribute("title");
+    if (panel.getAttribute("aria-label") !== nextAriaLabel) {
+      panel.setAttribute("aria-label", nextAriaLabel);
+    }
     updating = false;
   };
 
