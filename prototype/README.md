@@ -1,42 +1,43 @@
 # Webový spektrometr – prototyp
 
-Čistě webový prototyp pro převod obrazu z USB kamery na živou spektrální křivku.
+Prototyp běží přímo v prohlížeči a používá kameru USB-ZH jako zdroj obrazu.
 
-## Spuštění
+## Snímání
 
-Adresář `prototype/` je publikován přes GitLab Pages. Pro lokální spuštění lze použít například:
-
-```bash
-python -m http.server 8000 -d prototype
-```
-
-Potom otevřete `http://localhost:8000` v Chromiu.
-
-## Kamera
-
-Tlačítko **Spustit kameru** automaticky zkouší cílový režim 1920 × 1080 při 5 fps a poté náhradní režimy. Skutečné rozlišení a FPS se čtou zpět přes `MediaStreamTrack.getSettings()`.
-
-Chromium nezpřístupňuje, zda V4L2 používá YUYV nebo MJPEG, proto aplikace pixelový formát neodhaduje.
+Aplikace se snaží otevřít kameru v režimu 1920 × 1080 při 5 fps. Pokud cílový režim není dostupný, vyzkouší náhradní profily. Chromium nezpřístupňuje použitý V4L2 pixelový formát, proto aplikace neumí potvrdit YUYV nebo MJPEG.
 
 ## Nastavení obrazu
 
-- **Automaticky** zapne průběžnou automatickou expozici a automatické vyvážení bílé.
-- **Ručně** umožní nastavit expoziční čas a teplotu bílé.
-- Poslední ruční hodnoty se pamatují pouze po dobu otevření stránky; nepřenášejí se přes reload.
-- Při návratu na automatiku aplikace nejdřív vyčistí staré ImageCapture constraints a potom nastaví `exposureMode: continuous` a `whiteBalanceMode: continuous`.
-- Jas, kontrast, saturace a ostrost jsou samostatné korekce obrazu.
+Kamera při měření běží fyzicky v ručním režimu.
 
-UVC/V4L2 ovladač nebo firmware kamery může fyzické hodnoty uchovávat i po zavření stránky. Webová aplikace proto při každém novém spuštění výslovně požaduje automatický režim.
+### Automaticky (SW)
 
-## Zpracování
+Tlačítko spustí jednorázovou softwarovou optimalizaci expozice:
 
-- výběr ROI tažením myši;
-- výpočet R/G/B a jasového spektra po sloupcích;
-- klouzavé průměrování;
-- zachycení a odečet tmavého spektra;
-- lineární dvoubodová kalibrace pixel → nm;
-- CSV export a uložení aktuálního snímku.
+1. změří maximum barevných kanálů ve vybrané ROI;
+2. iterativně mění ruční expoziční čas;
+3. snaží se dostat maximum přibližně do rozsahu 205–232 z 255;
+4. po dosažení cíle expozici uzamkne.
 
-## Omezení
+Optimalizace neběží průběžně, aby se během měření neměnilo měřítko intenzity. Při změně zdroje nebo optické sestavy ji lze spustit znovu tlačítkem **Automaticky (SW)**.
 
-Přesný algoritmus automatické expozice a vyvážení bílé běží ve firmwaru nebo ovladači kamery. Prohlížeč může požadovat režim a číst jeho hlášený stav, ale nemůže řídit vlastní výpočet automatiky ani zaručit pixelový formát V4L2.
+Vyvážení bílé je při automatickém startu zafixováno na 4600 K. Pokud bylo před optimalizací nastaveno ručně, zachová se aktuální ruční hodnota. Jas, kontrast, saturace a ostrost se automaticky nemění, protože jejich změny by ovlivňovaly tvar a poměry spektra.
+
+### Ručně
+
+Tlačítko **Ručně** zastaví SW optimalizaci a zpřístupní ruční expoziční čas a teplotu bílé.
+
+## Spektrum
+
+- výběr ROI tažením přes náhled;
+- zobrazení R, G, B a jasového průběhu;
+- průměrování více snímků;
+- odečet tmavého spektra;
+- dvoubodová kalibrace pixel–vlnová délka;
+- export CSV a uložení snímku PNG.
+
+Tmavé spektrum se při změně expozice ruší, protože po změně expozičního času už není platné.
+
+## Spuštění
+
+Prohlížeč musí stránku načítat v bezpečném kontextu HTTPS nebo z localhostu. Nasazení v tomto projektu zajišťuje GitLab Pages.
