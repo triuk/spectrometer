@@ -40,17 +40,38 @@
       <hr>
 
       <section aria-labelledby="camera-controls-heading">
-        <div class="panel-heading-row compact-heading">
-          <div>
+        <div class="image-settings-heading">
+          <div class="heading-with-help">
             <h2 id="camera-controls-heading">Nastavení obrazu</h2>
-            <p class="hint">Zobrazeny jsou pouze parametry, které kamera zpřístupní prohlížeči.</p>
+            <span class="help-popover">
+              <button
+                type="button"
+                class="help-button"
+                aria-label="Nápověda k nastavení obrazu"
+                aria-describedby="imageSettingsHelp"
+              >?</button>
+              <span id="imageSettingsHelp" class="help-tooltip" role="tooltip">
+                Automatický režim řídí expozici a vyvážení bílé. Jas, kontrast, saturace a ostrost jsou samostatné obrazové úpravy. Poslední ruční hodnoty expozice a teploty bílé se při návratu do ručního režimu obnoví.
+              </span>
+            </span>
           </div>
-          <button id="manualModeButton" type="button" class="button ghost" disabled>Manuální režim</button>
+
+          <div class="mode-toggle" role="group" aria-label="Režim řízení expozice a vyvážení bílé">
+            <button id="autoModeButton" type="button" class="mode-button" aria-pressed="false" disabled>Automaticky</button>
+            <button id="manualModeButton" type="button" class="mode-button" aria-pressed="false" disabled>Ručně</button>
+          </div>
         </div>
-        <div id="cameraControls" class="camera-controls">
-          <p class="hint">Nastavení se načte po spuštění kamery.</p>
-        </div>
-        <p id="controlStatus" class="hint" aria-live="polite"></p>
+
+        <details id="cameraControlsDetails" class="image-settings-details">
+          <summary>
+            <span>Parametry obrazu</span>
+            <span id="imageSettingsState" class="details-state">Kamera není spuštěna</span>
+          </summary>
+          <div id="cameraControls" class="camera-controls">
+            <p class="hint">Nastavení se načte po spuštění kamery.</p>
+          </div>
+        </details>
+        <p id="controlStatus" class="hint control-status" aria-live="polite"></p>
       </section>
 
       <hr>
