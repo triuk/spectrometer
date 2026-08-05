@@ -1,3 +1,4 @@
+import "./constraints-compat.js";
 import "./image-settings-style.js";
 import { elements, setRunningControls } from "./core.js";
 import { startCamera, stopCamera } from "./camera.js";
