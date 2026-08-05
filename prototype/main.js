@@ -1,5 +1,6 @@
 import { elements, setRunningControls } from "./core.js";
 import { enableManualModes, startCamera, stopCamera } from "./camera.js";
+import { installCaptureStatusCorrection } from "./capture-status.js";
 import {
   beginRoiDrag,
   captureDarkSpectrum,
@@ -32,16 +33,28 @@ function bindEvents() {
   elements.overlayCanvas.addEventListener("dblclick", initialiseDefaultRoi);
 
   for (const input of [
-    elements.showLuminance, elements.showRed, elements.showGreen, elements.showBlue,
-    elements.subtractDark, elements.pixel1, elements.pixel2,
-    elements.wavelength1, elements.wavelength2,
-  ]) input.addEventListener("input", drawPlot);
+    elements.showLuminance,
+    elements.showRed,
+    elements.showGreen,
+    elements.showBlue,
+    elements.subtractDark,
+    elements.pixel1,
+    elements.pixel2,
+    elements.wavelength1,
+    elements.wavelength2,
+  ]) {
+    input.addEventListener("input", drawPlot);
+  }
 
   elements.averageFrames.addEventListener("change", trimSpectrumHistory);
-  window.addEventListener("resize", () => { resizeOverlay(); drawPlot(); });
+  window.addEventListener("resize", () => {
+    resizeOverlay();
+    drawPlot();
+  });
   window.addEventListener("beforeunload", stopCamera);
 }
 
+installCaptureStatusCorrection();
 bindEvents();
 setRunningControls(false);
 drawEmptyPlot();
