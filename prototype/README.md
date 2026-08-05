@@ -1,48 +1,42 @@
 # Webový spektrometr – prototyp
 
-Čistě webový prototyp pro USB kameru připojenou k optickému spektroskopu. Neobsahuje build systém ani externí knihovny.
+Čistě webový prototyp pro převod obrazu z USB kamery na živou spektrální křivku.
 
 ## Spuštění
 
-Aplikace je dostupná přes GitLab Pages. Pro lokální vývoj lze v této složce spustit:
+Adresář `prototype/` je publikován přes GitLab Pages. Pro lokální spuštění lze použít například:
 
 ```bash
-python -m http.server 8000
+python -m http.server 8000 -d prototype
 ```
 
-Potom otevři `http://localhost:8000` v Chromiu.
+Potom otevřete `http://localhost:8000` v Chromiu.
 
-## Funkce
+## Kamera
 
-- automatický výběr nejlepšího dostupného režimu snímání;
-- kompaktní barevný stav režimu vedle ovládacích tlačítek;
-- podrobnosti o kameře, rozlišení, FPS, periodě snímku a pixelovém formátu po najetí myší nebo zaměření klávesnicí;
-- živý náhled kamery;
-- výběr oblasti spektra tažením myší;
-- průměrování pixelů ve svislém směru;
-- R, G, B a jasové spektrum;
-- klouzavé průměrování více snímků;
+Tlačítko **Spustit kameru** automaticky zkouší cílový režim 1920 × 1080 při 5 fps a poté náhradní režimy. Skutečné rozlišení a FPS se čtou zpět přes `MediaStreamTrack.getSettings()`.
+
+Chromium nezpřístupňuje, zda V4L2 používá YUYV nebo MJPEG, proto aplikace pixelový formát neodhaduje.
+
+## Nastavení obrazu
+
+- **Automaticky** zapne průběžnou automatickou expozici a automatické vyvážení bílé.
+- **Ručně** umožní nastavit expoziční čas a teplotu bílé.
+- Poslední ruční hodnoty se pamatují pouze po dobu otevření stránky; nepřenášejí se přes reload.
+- Při návratu na automatiku aplikace nejdřív vyčistí staré ImageCapture constraints a potom nastaví `exposureMode: continuous` a `whiteBalanceMode: continuous`.
+- Jas, kontrast, saturace a ostrost jsou samostatné korekce obrazu.
+
+UVC/V4L2 ovladač nebo firmware kamery může fyzické hodnoty uchovávat i po zavření stránky. Webová aplikace proto při každém novém spuštění výslovně požaduje automatický režim.
+
+## Zpracování
+
+- výběr ROI tažením myši;
+- výpočet R/G/B a jasového spektra po sloupcích;
+- klouzavé průměrování;
 - zachycení a odečet tmavého spektra;
 - lineární dvoubodová kalibrace pixel → nm;
-- živý graf a detekce maxima;
-- export CSV s metadaty a uložení PNG;
-- diagnostika `getSettings()` a `getCapabilities()`;
-- dynamické ovládání parametrů, které kamera zpřístupní prohlížeči, například ruční expozice, white balance, jas, kontrast, saturace a ostrost.
+- CSV export a uložení aktuálního snímku.
 
-## Známá omezení
+## Omezení
 
-- Chromium vybírá kameru a způsob snímání. Webová aplikace neumí zaručit V4L2 formát YUYV místo MJPEG.
-- Chromium neposkytuje aplikaci použitý V4L2 pixelový formát / kompresi, proto je tento údaj označen jako nezjištěný.
-- Dostupnost jednotlivých ovládacích prvků závisí na kombinaci kamery, ovladače a prohlížeče.
-- Hodnoty získané přes `<video>` a `<canvas>` jsou již zpracované kamerou/prohlížečem a nejsou RAW hodnotami senzoru.
-- Kalibrace je zatím pouze lineární a dvoubodová.
-- Prototyp nebyl validován jako metrologický software.
-
-## Doporučený test
-
-1. Spusť kameru a zkontroluj zelený stav **Optimální**.
-2. Najetím na stav ověř 1920 × 1080, 5 fps a 200 ms/snímek.
-3. Přepni expozici a white balance do manuálního režimu.
-4. Vyber vodorovný pás obsahující spektrum.
-5. Bez světla zachyť pozadí.
-6. Nastav kalibrační body a exportuj CSV.
+Přesný algoritmus automatické expozice a vyvážení bílé běží ve firmwaru nebo ovladači kamery. Prohlížeč může požadovat režim a číst jeho hlášený stav, ale nemůže řídit vlastní výpočet automatiky ani zaručit pixelový formát V4L2.
