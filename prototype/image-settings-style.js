@@ -1,4 +1,4 @@
-import { installAutomaticModeRestart } from "./auto-mode-restart.js";
+import { installSoftwareAutoExposure } from "./software-auto-exposure.js";
 
 const href = new URL("./image-settings-layout.css", import.meta.url).href;
 
@@ -9,4 +9,4 @@ if (!document.querySelector(`link[href="${href}"]`)) {
   document.head.append(link);
 }
 
-installAutomaticModeRestart();
+installSoftwareAutoExposure();
