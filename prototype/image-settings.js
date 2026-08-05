@@ -136,6 +136,16 @@ function manualValueConstraints() {
   return constraints;
 }
 
+function refreshAutomaticValues() {
+  for (const delay of [150, 500, 1000]) {
+    window.setTimeout(() => {
+      if (!state.track || currentMode() !== "automatic") return;
+      updateDiagnostics();
+      syncImageSettingsUi();
+    }, delay);
+  }
+}
+
 async function applyImageMode(mode) {
   if (!state.track || applyingMode) return;
 
@@ -176,12 +186,14 @@ async function applyImageMode(mode) {
   } finally {
     applyingMode = false;
     syncImageSettingsUi({ openManual: mode === "manual", closeAutomatic: mode === "automatic" });
+    if (mode === "automatic") refreshAutomaticValues();
   }
 }
 
 export function installImageSettingsControls() {
   elements.autoModeButton.addEventListener("click", () => applyImageMode("automatic"));
   elements.manualModeButton.addEventListener("click", () => applyImageMode("manual"));
+  elements.cameraControlsDetails.addEventListener("toggle", () => syncImageSettingsUi());
 
   elements.cameraControls.addEventListener("change", (event) => {
     const name = controlNameForInput(event.target);
