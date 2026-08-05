@@ -8,7 +8,7 @@ Aplikace se snaží otevřít kameru v režimu 1920 × 1080 při 5 fps. Pokud c�
 
 ## Nastavení obrazu
 
-Kamera při měření běží fyzicky v ručním režimu. Požadavky starší části prototypu na `exposureMode: continuous` nebo `whiteBalanceMode: continuous` se v softwarově řízeném režimu převádějí na `manual`, takže firmware kamery sám nemění expozici ani bílou.
+Kamera při měření běží fyzicky v ručním režimu. Hardwarová automatická expozice a automatické vyvážení bílé se nepoužívají.
 
 ### Optimalizovat (SW)
 
@@ -21,7 +21,7 @@ Tlačítko spustí jednorázovou softwarovou optimalizaci expozice:
 
 Optimalizace neběží průběžně, aby se během měření neměnilo měřítko intenzity. Při změně zdroje nebo optické sestavy ji lze spustit znovu tlačítkem **Optimalizovat (SW)**.
 
-Vyvážení bílé je při automatickém startu zafixováno na 4600 K. Pokud bylo před optimalizací nastaveno ručně, zachová se aktuální ruční hodnota.
+Vyvážení bílé je při prvním spuštění optimalizace zafixováno na 4600 K. Pokud bylo před další optimalizací nastaveno ručně, zachová se aktuální ruční hodnota.
 
 Jas, kontrast, saturace a ostrost se automaticky nemění. Nejde o chybu: jejich průběžná optimalizace by měnila poměry kanálů, šířku spektrálních čar a tvar měřeného spektra. Pro opakovatelné měření musí zůstat pevné.
 
