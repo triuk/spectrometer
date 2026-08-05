@@ -8,7 +8,7 @@ Aplikace se snaží otevřít kameru v režimu 1920 × 1080 při 5 fps. Pokud c�
 
 ## Nastavení obrazu
 
-Kamera při měření běží fyzicky v ručním režimu.
+Kamera při měření běží fyzicky v ručním režimu. Požadavky starší části prototypu na `exposureMode: continuous` nebo `whiteBalanceMode: continuous` se v softwarově řízeném režimu převádějí na `manual`, takže firmware kamery sám nemění expozici ani bílou.
 
 ### Automaticky (SW)
 
