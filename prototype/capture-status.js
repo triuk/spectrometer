@@ -34,12 +34,13 @@ export function installCaptureStatusCorrection() {
     );
     const nextClass = `capture-mode capture-mode-${optimal ? "optimal" : "fallback"}`;
     const nextBadge = optimal ? "Optimální" : "Fallback";
+    const nextTitle = optimal
+      ? "Kamera běží v cílovém režimu 1920 × 1080 při 5 fps."
+      : "Skutečný režim neodpovídá cílové kameře, rozlišení nebo FPS.";
 
     if (panel.className !== nextClass) panel.className = nextClass;
     if (badge.textContent !== nextBadge) badge.textContent = nextBadge;
-    panel.title = optimal
-      ? "Kamera běží v cílovém režimu 1920 × 1080 při 5 fps."
-      : "Skutečný režim neodpovídá cílové kameře, rozlišení nebo FPS.";
+    if (panel.title !== nextTitle) panel.title = nextTitle;
   };
 
   const scheduleUpdate = () => {
@@ -50,6 +51,7 @@ export function installCaptureStatusCorrection() {
 
   new MutationObserver(scheduleUpdate).observe(panel, {
     attributes: true,
+    attributeFilter: ["class"],
     childList: true,
     characterData: true,
     subtree: true,
