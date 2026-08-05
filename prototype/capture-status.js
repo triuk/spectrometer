@@ -5,6 +5,14 @@ function readFrameRate(text) {
   return Number.isFinite(value) ? value : null;
 }
 
+function formatFramePeriod(frameRate) {
+  if (!Number.isFinite(frameRate) || frameRate <= 0) return null;
+  const milliseconds = 1000 / frameRate;
+  return Number.isInteger(milliseconds)
+    ? String(milliseconds)
+    : milliseconds.toFixed(milliseconds < 100 ? 1 : 0);
+}
+
 function isOptimalMode(cameraName, resolution, frameRate) {
   return TARGET_CAMERA_LABEL.test(cameraName)
     && resolution.replaceAll(" ", "") === "1920×1080"
@@ -22,36 +30,43 @@ export function installCaptureStatusCorrection() {
   if (!panel || !badge || !cameraName || !resolution || !frameRate) return;
 
   let scheduled = false;
+  let updating = false;
 
   const update = () => {
     scheduled = false;
-    if (cameraName.textContent === "–") return;
+    if (updating || cameraName.textContent === "–") return;
 
-    const optimal = isOptimalMode(
-      cameraName.textContent,
-      resolution.textContent,
-      readFrameRate(frameRate.textContent),
-    );
+    const fps = readFrameRate(frameRate.textContent);
+    const period = formatFramePeriod(fps);
+    const optimal = isOptimalMode(cameraName.textContent, resolution.textContent, fps);
     const nextClass = `capture-mode capture-mode-${optimal ? "optimal" : "fallback"}`;
     const nextBadge = optimal ? "Optimální" : "Fallback";
-    const nextTitle = optimal
-      ? "Kamera běží v cílovém režimu 1920 × 1080 při 5 fps."
-      : "Skutečný režim neodpovídá cílové kameře, rozlišení nebo FPS.";
+    const nextFrameText = fps === null
+      ? "Nezjištěno"
+      : `${fps.toFixed(fps % 1 ? 2 : 0)} fps${period ? ` · ${period} ms/snímek` : ""}`;
 
+    updating = true;
     if (panel.className !== nextClass) panel.className = nextClass;
     if (badge.textContent !== nextBadge) badge.textContent = nextBadge;
-    if (panel.title !== nextTitle) panel.title = nextTitle;
+    if (frameRate.textContent !== nextFrameText) frameRate.textContent = nextFrameText;
+    panel.removeAttribute("title");
+    panel.setAttribute(
+      "aria-label",
+      optimal
+        ? "Optimální režim snímání. Podrobnosti zobrazíte najetím myší nebo zaměřením klávesnicí."
+        : "Náhradní režim snímání. Podrobnosti zobrazíte najetím myší nebo zaměřením klávesnicí.",
+    );
+    updating = false;
   };
 
   const scheduleUpdate = () => {
-    if (scheduled) return;
+    if (scheduled || updating) return;
     scheduled = true;
     queueMicrotask(update);
   };
 
   new MutationObserver(scheduleUpdate).observe(panel, {
     attributes: true,
-    attributeFilter: ["class"],
     childList: true,
     characterData: true,
     subtree: true,
