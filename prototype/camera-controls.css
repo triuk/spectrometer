@@ -1,43 +1,97 @@
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.app-grid { padding-top: 1rem; }
+
 .compact-heading { align-items: center; }
 .compact-heading .hint { margin-bottom: 0.45rem; }
 
+.camera-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
 .capture-mode {
-  margin-top: 1rem;
-  padding: 0.9rem;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.3rem;
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.025);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: rgb(10 15 24 / 0.78);
+  cursor: help;
+}
+.capture-mode:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .capture-mode-optimal {
   border-color: #3fcf8e;
-  background: rgba(63, 207, 142, 0.09);
+  background: rgba(63, 207, 142, 0.11);
 }
 .capture-mode-fallback {
   border-color: #f5a742;
-  background: rgba(245, 167, 66, 0.1);
+  background: rgba(245, 167, 66, 0.12);
 }
-.capture-mode-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.7rem;
+.capture-mode-error {
+  border-color: var(--danger);
+  background: rgb(255 114 114 / 0.1);
 }
 .capture-mode-badge {
-  padding: 0.2rem 0.55rem;
-  border: 1px solid currentColor;
-  border-radius: 999px;
+  color: var(--muted);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .capture-mode-optimal .capture-mode-badge { color: #60e5aa; }
 .capture-mode-fallback .capture-mode-badge { color: #ffb85c; }
+.capture-mode-error .capture-mode-badge { color: var(--danger); }
+
+.capture-mode-tooltip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  width: min(23rem, calc(100vw - 2rem));
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #080d15;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+.capture-mode:hover .capture-mode-tooltip,
+.capture-mode:focus .capture-mode-tooltip,
+.capture-mode:focus-within .capture-mode-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
 .capture-mode-grid {
   display: grid;
   gap: 0.5rem;
   margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 .capture-mode-grid > div {
   display: grid;
