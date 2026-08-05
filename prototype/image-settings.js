@@ -5,14 +5,12 @@ import {
 } from "./core.js";
 import { updateDiagnostics } from "./camera.js";
 
-const MANUAL_VALUES_KEY = "spectrometer.manualImageValues";
 const IMAGE_SETTINGS_STYLESHEET = new URL("./image-settings-layout.css", import.meta.url).href;
 const AUTO_VALUE = "continuous";
 const MANUAL_VALUE = "manual";
 const MODE_NAMES = ["exposureMode", "whiteBalanceMode"];
 const AUTO_CONTROLLED_NAMES = new Set(["exposureTime", "colorTemperature"]);
 const CORRECTION_NAMES = new Set(["brightness", "contrast", "saturation", "sharpness"]);
-const CAPTURE_NAMES = ["width", "height", "frameRate"];
 const CONTROL_LABELS = {
   exposureTime: "Expozice",
   colorTemperature: "Teplota bílé",
@@ -22,25 +20,15 @@ const CONTROL_LABELS = {
   sharpness: "Ostrost",
 };
 
-let manualValues = loadManualValues();
+// Ruční hodnoty si pamatujeme jen po dobu otevření stránky. Kamera/ovladač
+// může vlastní UVC hodnoty uchovávat i po zavření streamu, ale aplikace už je
+// nepřenáší přes localStorage do dalšího načtení stránky.
+let manualValues = {};
 let applying = false;
 let organising = false;
 let initialisedTrack = null;
 let refreshTimer = null;
 let ui = null;
-
-function loadManualValues() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(MANUAL_VALUES_KEY) ?? "{}");
-    return stored && typeof stored === "object" ? stored : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveManualValues() {
-  localStorage.setItem(MANUAL_VALUES_KEY, JSON.stringify(manualValues));
-}
 
 function ensureStylesheet() {
   if (document.querySelector(`link[href="${IMAGE_SETTINGS_STYLESHEET}"]`)) return;
@@ -151,17 +139,22 @@ function numericValueForInput(input) {
   if (!Number.isFinite(candidate)) return fallback;
   const min = Number(range?.min);
   const max = Number(range?.max);
-  return Math.min(Number.isFinite(max) ? max : candidate, Math.max(Number.isFinite(min) ? min : candidate, candidate));
+  return Math.min(
+    Number.isFinite(max) ? max : candidate,
+    Math.max(Number.isFinite(min) ? min : candidate, candidate),
+  );
 }
 
 function rowsInStructuredUi() {
   if (!ui) return [];
-  return [...ui.manualControls.querySelectorAll(".camera-control"), ...ui.correctionControls.querySelectorAll(".camera-control")];
+  return [
+    ...ui.manualControls.querySelectorAll(".camera-control"),
+    ...ui.correctionControls.querySelectorAll(".camera-control"),
+  ];
 }
 
 function addHint(container, text) {
-  const hint = makeElement("p", "hint", text);
-  container.append(hint);
+  container.append(makeElement("p", "hint", text));
 }
 
 function organiseGeneratedRows() {
@@ -181,7 +174,8 @@ function organiseGeneratedRows() {
       continue;
     }
     if (AUTO_CONTROLLED_NAMES.has(name)) ui.manualControls.append(row);
-    else ui.correctionControls.append(row);
+    else if (CORRECTION_NAMES.has(name)) ui.correctionControls.append(row);
+    else row.remove();
   }
 
   ui.source.replaceChildren();
@@ -190,8 +184,12 @@ function organiseGeneratedRows() {
     addHint(ui.manualControls, "Nastavení se načte po spuštění kamery.");
     addHint(ui.correctionControls, "Nastavení se načte po spuštění kamery.");
   } else {
-    if (!ui.manualControls.children.length) addHint(ui.manualControls, "Kamera neposkytuje ruční expozici nebo teplotu bílé.");
-    if (!ui.correctionControls.children.length) addHint(ui.correctionControls, "Kamera neposkytuje žádné korekce obrazu.");
+    if (!ui.manualControls.children.length) {
+      addHint(ui.manualControls, "Kamera neposkytuje ruční expozici nebo teplotu bílé.");
+    }
+    if (!ui.correctionControls.children.length) {
+      addHint(ui.correctionControls, "Kamera neposkytuje žádné korekce obrazu.");
+    }
   }
 
   organising = false;
@@ -221,8 +219,10 @@ export function syncImageSettingsUi({ syncControls = false } = {}) {
   const settings = state.track?.getSettings() ?? {};
   const mode = running ? currentMode(settings) : "unavailable";
   const modeControls = availableModeControls();
-  const canAutomatic = modeControls.length > 0 && modeControls.every((name) => modeIsSupported(name, AUTO_VALUE));
-  const canManual = modeControls.length > 0 && modeControls.every((name) => modeIsSupported(name, MANUAL_VALUE));
+  const canAutomatic = modeControls.length > 0
+    && modeControls.every((name) => modeIsSupported(name, AUTO_VALUE));
+  const canManual = modeControls.length > 0
+    && modeControls.every((name) => modeIsSupported(name, MANUAL_VALUE));
 
   elements.autoModeButton.disabled = !running || !canAutomatic || applying;
   elements.manualModeButton.disabled = !running || !canManual || applying;
@@ -247,70 +247,48 @@ function rememberManualValues() {
   for (const name of AUTO_CONTROLLED_NAMES) {
     if (Number.isFinite(Number(settings[name]))) manualValues[name] = Number(settings[name]);
   }
-  saveManualValues();
 }
 
-function exact(value) {
-  return { exact: value };
+function advancedConstraints(values) {
+  return { advanced: [values] };
 }
 
-function captureConstraints(settings) {
-  const constraints = {};
-  for (const name of CAPTURE_NAMES) {
-    const value = Number(settings[name]);
-    if (Number.isFinite(value) && value > 0) constraints[name] = exact(value);
-  }
-  return constraints;
-}
-
-function requiredModeConstraints(mode, settings = state.track?.getSettings() ?? {}) {
+function modeValues(mode, settings = state.track?.getSettings() ?? {}) {
   const targetValue = mode === "manual" ? MANUAL_VALUE : AUTO_VALUE;
-  const constraints = captureConstraints(settings);
+  const values = {};
 
   for (const name of availableModeControls()) {
-    if (modeIsSupported(name, targetValue)) constraints[name] = exact(targetValue);
+    if (modeIsSupported(name, targetValue)) values[name] = targetValue;
   }
 
+  // Při přechodu na Auto záměrně neposíláme exposureTime ani
+  // colorTemperature. Staré ruční constraints se předtím vyčistí.
   if (mode === "manual") {
     for (const name of AUTO_CONTROLLED_NAMES) {
       const capability = state.capabilities[name];
       if (!capability || typeof capability.min !== "number" || typeof capability.max !== "number") continue;
       const remembered = Number(manualValues[name]);
       const fallback = Number(settings[name]);
-      const value = Number.isFinite(remembered) ? remembered : fallback;
-      if (!Number.isFinite(value)) continue;
-      constraints[name] = exact(Math.min(capability.max, Math.max(capability.min, value)));
+      const selected = Number.isFinite(remembered) ? remembered : fallback;
+      if (!Number.isFinite(selected)) continue;
+      values[name] = Math.min(capability.max, Math.max(capability.min, selected));
     }
   }
 
-  return constraints;
-}
-
-function requiredValueConstraints(name, value, settings = state.track?.getSettings() ?? {}) {
-  const mode = currentMode(settings);
-  const constraints = captureConstraints(settings);
-
-  for (const modeName of availableModeControls()) {
-    const modeValue = settings[modeName];
-    if (modeIsSupported(modeName, modeValue)) constraints[modeName] = exact(modeValue);
-  }
-
-  if (mode === "manual") {
-    for (const autoName of AUTO_CONTROLLED_NAMES) {
-      const current = autoName === name ? value : Number(settings[autoName]);
-      if (Number.isFinite(current)) constraints[autoName] = exact(current);
-    }
-  }
-
-  constraints[name] = exact(value);
-  return constraints;
+  return values;
 }
 
 function verifyMode(mode) {
   const expected = mode === "manual" ? MANUAL_VALUE : AUTO_VALUE;
   const settings = state.track?.getSettings() ?? {};
-  const failed = availableModeControls().filter((name) => modeIsSupported(name, expected) && settings[name] !== expected);
-  if (failed.length) throw new Error(`kamera stále hlásí ${failed.map((name) => `${name}=${settings[name] ?? "?"}`).join(", ")}`);
+  const failed = availableModeControls().filter(
+    (name) => modeIsSupported(name, expected) && settings[name] !== expected,
+  );
+  if (failed.length) {
+    throw new Error(
+      `kamera stále hlásí ${failed.map((name) => `${name}=${settings[name] ?? "?"}`).join(", ")}`,
+    );
+  }
 }
 
 async function applyImageMode(mode, { initial = false } = {}) {
@@ -322,16 +300,19 @@ async function applyImageMode(mode, { initial = false } = {}) {
   setControlStatus(mode === "manual" ? "Přepínám na ruční řízení…" : "Zapínám automatické řízení…");
 
   try {
-    const constraints = requiredModeConstraints(mode);
-    await state.track.applyConstraints(constraints);
-    await new Promise((resolve) => window.setTimeout(resolve, 120));
+    // Chromium si ImageCapture constraints drží odděleně. Prázdný objekt je
+    // nejprve vyčistí, aby v Auto režimu nezůstala aktivní stará ruční
+    // exposureTime/colorTemperature constraint.
+    await state.track.applyConstraints({});
+    await state.track.applyConstraints(advancedConstraints(modeValues(mode)));
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
     verifyMode(mode);
 
     if (mode === "manual") rememberManualValues();
     updateDiagnostics();
     syncImageSettingsUi({ syncControls: true });
     setControlStatus(mode === "manual"
-      ? "Ruční režim je aktivní; poslední ruční hodnoty byly obnoveny."
+      ? "Ruční režim je aktivní."
       : "Automatický režim je aktivní; kamera může reagovat během několika snímků.");
   } catch (error) {
     console.error(error);
@@ -358,15 +339,20 @@ async function applyControlValue(name, value) {
   setControlStatus(`Nastavuji ${CONTROL_LABELS[name] ?? name}…`);
 
   try {
-    await state.track.applyConstraints(requiredValueConstraints(name, value));
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
+    // Posíláme jediný ImageCapture parametr. Rozlišení a FPS se zde nesmí
+    // objevit, jinak Chromium požadavek odmítne jako smíšený.
+    await state.track.applyConstraints(advancedConstraints({ [name]: value }));
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+
     const actual = Number(state.track.getSettings()[name]);
-    if (Number.isFinite(actual) && Math.abs(actual - value) > 0.51) {
+    const step = Number(state.capabilities[name]?.step);
+    const tolerance = Number.isFinite(step) ? Math.max(step / 2, 0.01) : 0.51;
+    if (Number.isFinite(actual) && Math.abs(actual - value) > tolerance) {
       throw new Error(`kamera přijala hodnotu ${actual} místo ${value}`);
     }
+
     if (AUTO_CONTROLLED_NAMES.has(name)) {
       manualValues[name] = Number.isFinite(actual) ? actual : value;
-      saveManualValues();
     }
     updateDiagnostics();
     setControlStatus(`${CONTROL_LABELS[name] ?? name}: ${Number.isFinite(actual) ? actual : value}`);
@@ -412,6 +398,10 @@ async function handleTrackChange() {
 }
 
 export function installImageSettingsControls() {
+  // Odstranění hodnot uložených starší verzí prototypu. Nová verze je přes
+  // reload stránky záměrně nepřenáší.
+  localStorage.removeItem("spectrometer.manualImageValues");
+
   ensureStylesheet();
   buildStructuredUi();
   elements.autoModeButton.addEventListener("click", () => applyImageMode("automatic"));
