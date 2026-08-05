@@ -55,7 +55,7 @@ function setText(element, text) {
 }
 
 function maintainSoftwareUi() {
-  elements.autoModeButton.textContent = "Automaticky (SW)";
+  elements.autoModeButton.textContent = "Optimalizovat (SW)";
   if (!selected || !state.track) return;
 
   document.documentElement.dataset.softwareAutoExposure = "active";
@@ -172,8 +172,6 @@ function measureSpectralPeak() {
   const verticalStep = Math.max(1, Math.floor(roi.height / 48));
   let peak = 0;
 
-  // Pro každý sloupec zprůměrujeme výšku ROI a hledáme nejvyšší barevný
-  // kanál. To zachová i úzké spektrální čáry a potlačí jednotlivé vadné pixely.
   for (let x = 0; x < roi.width; x += 1) {
     let red = 0;
     let green = 0;
@@ -242,7 +240,7 @@ async function optimiseExposure({ automaticStart = false } = {}) {
 
   if (state.darkSpectrum) clearDarkSpectrum();
   setControlStatus(automaticStart
-    ? "Inicializuji SW automatickou expozici…"
+    ? "Inicializuji SW optimalizaci expozice…"
     : "Optimalizuji expozici podle vybrané ROI…");
 
   try {
@@ -311,7 +309,7 @@ function monitorCamera() {
   runToken += 1;
 
   if (!state.track) {
-    document.documentElement.dataset.softwareAutoExposure = "inactive";
+    document.documentElement.dataset.softwareAutoExposure = "managed";
     return;
   }
 
@@ -325,10 +323,10 @@ function monitorCamera() {
 export function installSoftwareAutoExposure() {
   const help = document.querySelector("#imageSettingsHelp");
   if (help) {
-    help.textContent = "Automaticky (SW) jednorázově nastaví ruční expozici podle maxima ve vybrané ROI a potom ji uzamkne. Vyvážení bílé a korekce obrazu zůstávají pevné, aby se neměnil tvar spektra.";
+    help.textContent = "Optimalizovat (SW) jednorázově nastaví ruční expozici podle maxima ve vybrané ROI a potom ji uzamkne. Vyvážení bílé a korekce obrazu zůstávají pevné, aby se neměnil tvar spektra.";
   }
 
-  elements.autoModeButton.textContent = "Automaticky (SW)";
+  elements.autoModeButton.textContent = "Optimalizovat (SW)";
 
   elements.autoModeButton.addEventListener("click", (event) => {
     if (!state.track) return;
