@@ -4,49 +4,38 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>Webový spektrometr – prototyp</title>
+  <title>Webový spektrometr</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="camera-controls.css">
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <p class="eyebrow">Prototyp</p>
-      <h1>Webový spektrometr</h1>
-      <p class="subtitle">USB kamera → oblast spektra → živá spektrální křivka</p>
-    </div>
-    <div class="status-stack" aria-live="polite">
-      <span id="cameraStatus" class="status status-idle">Kamera není spuštěna</span>
-      <span id="frameStatus" class="status-note">–</span>
-    </div>
-  </header>
+  <h1 class="sr-only">Webový spektrometr</h1>
+  <span id="cameraStatus" class="sr-only" aria-live="polite">Kamera není spuštěna</span>
+  <span id="frameStatus" class="sr-only">–</span>
 
   <main class="app-grid">
-    <section class="panel controls-panel" aria-labelledby="camera-heading">
-      <h2 id="camera-heading">Kamera</h2>
-      <p class="hint">Aplikace automaticky zkusí nejlepší režim pro kameru spektrometru.</p>
-
-      <div class="button-row">
+    <section class="panel controls-panel">
+      <div class="camera-toolbar">
         <button id="startButton" type="button" class="button primary">Spustit kameru</button>
         <button id="stopButton" type="button" class="button secondary" disabled>Zastavit</button>
-      </div>
 
-      <section id="captureModeStatus" class="capture-mode capture-mode-idle" aria-live="polite">
-        <div class="capture-mode-heading">
-          <strong>Režim snímání</strong>
+        <div
+          id="captureModeStatus"
+          class="capture-mode capture-mode-idle"
+          tabindex="0"
+          aria-describedby="captureModeTooltip"
+        >
           <span id="captureModeBadge" class="capture-mode-badge">Čeká</span>
+          <div id="captureModeTooltip" class="capture-mode-tooltip" role="tooltip">
+            <dl class="capture-mode-grid">
+              <div><dt>Kamera</dt><dd id="captureCameraName">–</dd></div>
+              <div><dt>Rozlišení</dt><dd id="captureResolution">–</dd></div>
+              <div><dt>FPS / perioda snímku</dt><dd id="captureFrameRate">–</dd></div>
+              <div><dt>Pixelový formát / komprese</dt><dd id="captureFormat">–</dd></div>
+            </dl>
+          </div>
         </div>
-        <dl class="capture-mode-grid">
-          <div><dt>Kamera</dt><dd id="captureCameraName">–</dd></div>
-          <div><dt>Rozlišení</dt><dd id="captureResolution">–</dd></div>
-          <div><dt>FPS</dt><dd id="captureFrameRate">–</dd></div>
-          <div><dt>Pixelový formát / komprese</dt><dd id="captureFormat">–</dd></div>
-        </dl>
-      </section>
-
-      <p class="hint">
-        Chromium nezpřístupňuje, zda V4L2 používá YUYV nebo MJPEG. Aplikace proto tuto hodnotu nezaměňuje za odhad.
-      </p>
+      </div>
 
       <hr>
 
@@ -54,7 +43,7 @@
         <div class="panel-heading-row compact-heading">
           <div>
             <h2 id="camera-controls-heading">Nastavení obrazu</h2>
-            <p class="hint">Zobrazeny jsou pouze parametry, které vybraná kamera zpřístupní prohlížeči.</p>
+            <p class="hint">Zobrazeny jsou pouze parametry, které kamera zpřístupní prohlížeči.</p>
           </div>
           <button id="manualModeButton" type="button" class="button ghost" disabled>Manuální režim</button>
         </div>
