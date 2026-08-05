@@ -1,6 +1,7 @@
 import { elements, setRunningControls } from "./core.js";
-import { enableManualModes, startCamera, stopCamera } from "./camera.js";
+import { startCamera, stopCamera } from "./camera.js";
 import { installCaptureStatusCorrection } from "./capture-status.js";
+import { installImageSettingsControls } from "./image-settings.js";
 import {
   beginRoiDrag,
   captureDarkSpectrum,
@@ -20,7 +21,6 @@ import {
 function bindEvents() {
   elements.startButton.addEventListener("click", startCamera);
   elements.stopButton.addEventListener("click", stopCamera);
-  elements.manualModeButton.addEventListener("click", enableManualModes);
   elements.captureDarkButton.addEventListener("click", captureDarkSpectrum);
   elements.clearDarkButton.addEventListener("click", clearDarkSpectrum);
   elements.useRoiWidthButton.addEventListener("click", useRoiWidthForCalibration);
@@ -55,6 +55,7 @@ function bindEvents() {
 }
 
 installCaptureStatusCorrection();
+installImageSettingsControls();
 bindEvents();
 setRunningControls(false);
 drawEmptyPlot();
