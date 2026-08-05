@@ -314,10 +314,6 @@ function monitorCamera() {
   }
 
   selected = true;
-  const track = state.track;
-  window.setTimeout(() => {
-    if (track === state.track && selected && state.roi) optimiseExposure({ automaticStart: true });
-  }, 700);
 }
 
 export function installSoftwareAutoExposure() {
