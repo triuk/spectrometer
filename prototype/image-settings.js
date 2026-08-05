@@ -6,6 +6,7 @@ import {
 import { updateDiagnostics } from "./camera.js";
 
 const MANUAL_VALUES_KEY = "spectrometer.manualImageValues";
+const IMAGE_SETTINGS_STYLESHEET = new URL("./image-settings-layout.css", import.meta.url).href;
 const AUTO_VALUE = "continuous";
 const MANUAL_VALUE = "manual";
 const MODE_NAMES = ["exposureMode", "whiteBalanceMode"];
@@ -39,6 +40,14 @@ function loadManualValues() {
 
 function saveManualValues() {
   localStorage.setItem(MANUAL_VALUES_KEY, JSON.stringify(manualValues));
+}
+
+function ensureStylesheet() {
+  if (document.querySelector(`link[href="${IMAGE_SETTINGS_STYLESHEET}"]`)) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = IMAGE_SETTINGS_STYLESHEET;
+  document.head.append(link);
 }
 
 function makeElement(tagName, className, text = "") {
@@ -211,8 +220,9 @@ export function syncImageSettingsUi({ syncControls = false } = {}) {
   const running = Boolean(state.track);
   const settings = state.track?.getSettings() ?? {};
   const mode = running ? currentMode(settings) : "unavailable";
-  const canAutomatic = availableModeControls().every((name) => modeIsSupported(name, AUTO_VALUE));
-  const canManual = availableModeControls().every((name) => modeIsSupported(name, MANUAL_VALUE));
+  const modeControls = availableModeControls();
+  const canAutomatic = modeControls.length > 0 && modeControls.every((name) => modeIsSupported(name, AUTO_VALUE));
+  const canManual = modeControls.length > 0 && modeControls.every((name) => modeIsSupported(name, MANUAL_VALUE));
 
   elements.autoModeButton.disabled = !running || !canAutomatic || applying;
   elements.manualModeButton.disabled = !running || !canManual || applying;
@@ -402,6 +412,7 @@ async function handleTrackChange() {
 }
 
 export function installImageSettingsControls() {
+  ensureStylesheet();
   buildStructuredUi();
   elements.autoModeButton.addEventListener("click", () => applyImageMode("automatic"));
   elements.manualModeButton.addEventListener("click", () => applyImageMode("manual"));
@@ -411,7 +422,8 @@ export function installImageSettingsControls() {
   new MutationObserver(() => {
     if (organising) return;
     queueMicrotask(() => {
-      organiseGeneratedRows();
+      const hasGeneratedRows = Boolean(ui.source.querySelector(".camera-control"));
+      if (hasGeneratedRows || !state.track) organiseGeneratedRows();
       syncImageSettingsUi({ syncControls: true });
       handleTrackChange();
     });
