@@ -76,7 +76,20 @@ export function supportsManualMode() {
 
 export function setCameraStatus(text, kind = "idle") {
   elements.cameraStatus.textContent = text;
-  elements.cameraStatus.className = `status status-${kind}`;
+
+  if (kind === "error") {
+    elements.captureModeStatus.className = "capture-mode capture-mode-error";
+    elements.captureModeBadge.textContent = "Chyba";
+    elements.captureModeStatus.setAttribute("aria-label", text);
+    return;
+  }
+
+  if (!state.track && kind === "idle") {
+    const starting = text !== "Kamera není spuštěna";
+    elements.captureModeStatus.className = "capture-mode capture-mode-idle";
+    elements.captureModeBadge.textContent = starting ? "Spouštím…" : "Čeká";
+    elements.captureModeStatus.setAttribute("aria-label", text);
+  }
 }
 
 export function setControlStatus(text, isError = false) {
