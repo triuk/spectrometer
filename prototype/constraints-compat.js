@@ -37,21 +37,45 @@ function sanitizeConstraintSet(constraints) {
   return sanitized;
 }
 
+function manualModeValue(value) {
+  if (value === "continuous") return "manual";
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+
+  const converted = { ...value };
+  if (converted.exact === "continuous") converted.exact = "manual";
+  if (converted.ideal === "continuous") converted.ideal = "manual";
+  return converted;
+}
+
+function keepSoftwareManagedCameraManual(constraints) {
+  if (!constraints || typeof constraints !== "object" || Array.isArray(constraints)) return constraints;
+  if (!document.documentElement.dataset.softwareAutoExposure) return constraints;
+
+  const converted = { ...constraints };
+  if ("exposureMode" in converted) converted.exposureMode = manualModeValue(converted.exposureMode);
+  if ("whiteBalanceMode" in converted) converted.whiteBalanceMode = manualModeValue(converted.whiteBalanceMode);
+  return converted;
+}
+
+function prepareConstraintSet(constraints) {
+  return keepSoftwareManagedCameraManual(sanitizeConstraintSet(constraints));
+}
+
 const prototype = globalThis.MediaStreamTrack?.prototype;
 const originalApplyConstraints = prototype?.applyConstraints;
 
 if (prototype && originalApplyConstraints && !originalApplyConstraints.__spectrometerCompatibilityPatch) {
   function applyCompatibleConstraints(constraints = {}) {
-    let sanitized = sanitizeConstraintSet(constraints);
+    let prepared = prepareConstraintSet(constraints);
 
-    if (Array.isArray(sanitized?.advanced)) {
-      sanitized = {
-        ...sanitized,
-        advanced: sanitized.advanced.map(sanitizeConstraintSet),
+    if (Array.isArray(prepared?.advanced)) {
+      prepared = {
+        ...prepared,
+        advanced: prepared.advanced.map(prepareConstraintSet),
       };
     }
 
-    return originalApplyConstraints.call(this, sanitized);
+    return originalApplyConstraints.call(this, prepared);
   }
 
   Object.defineProperty(applyCompatibleConstraints, "__spectrometerCompatibilityPatch", {
