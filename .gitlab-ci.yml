@@ -1,0 +1,12 @@
+stages:
+  - deploy
+
+deploy-pages:
+  stage: deploy
+  script:
+    - test -f prototype/index.html
+  pages:
+    publish: prototype
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_COMMIT_BRANCH == "agent/web-spectrometer-prototype"'
