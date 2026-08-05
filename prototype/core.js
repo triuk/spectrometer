@@ -10,7 +10,10 @@ export const elements = {
   captureResolution: document.querySelector("#captureResolution"),
   captureFrameRate: document.querySelector("#captureFrameRate"),
   captureFormat: document.querySelector("#captureFormat"),
+  autoModeButton: document.querySelector("#autoModeButton"),
   manualModeButton: document.querySelector("#manualModeButton"),
+  cameraControlsDetails: document.querySelector("#cameraControlsDetails"),
+  imageSettingsState: document.querySelector("#imageSettingsState"),
   cameraControls: document.querySelector("#cameraControls"),
   controlStatus: document.querySelector("#controlStatus"),
   averageFrames: document.querySelector("#averageFrames"),
@@ -69,11 +72,6 @@ export function toFiniteNumber(value, fallback) {
   return Number.isFinite(number) ? number : fallback;
 }
 
-export function supportsManualMode() {
-  return state.capabilities.exposureMode?.includes("manual")
-    || state.capabilities.whiteBalanceMode?.includes("manual");
-}
-
 export function setCameraStatus(text, kind = "idle") {
   elements.cameraStatus.textContent = text;
 
@@ -100,7 +98,8 @@ export function setControlStatus(text, isError = false) {
 export function setRunningControls(running) {
   elements.startButton.disabled = running;
   elements.stopButton.disabled = !running;
-  elements.manualModeButton.disabled = !running || !supportsManualMode();
+  elements.autoModeButton.disabled = !running;
+  elements.manualModeButton.disabled = !running;
   elements.captureDarkButton.disabled = !running || !state.averagedSpectrum;
   elements.exportCsvButton.disabled = !running || !state.averagedSpectrum;
   elements.saveFrameButton.disabled = !running;
