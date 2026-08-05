@@ -10,11 +10,25 @@ V této složce spusť lokální HTTP server:
 python -m http.server 8000
 ```
 
-Potom otevři `http://localhost:8000` v Chromiu. Po stisknutí **Spustit kameru** vyber požadovanou kameru v dialogu prohlížeče.
+Potom otevři `http://localhost:8000` v Chromiu. Při prvním použití může Chromium vyžádat oprávnění nebo výběr kamery. Aplikace si následně uloží `deviceId` zvolené kamery a při dalších spuštěních ji otevře přímo, dokud zůstane identifikátor platný.
+
+## Automatický režim kamery
+
+Po stisknutí **Spustit kameru** aplikace postupně zkouší:
+
+1. 1920 × 1080 při přesně 5 fps — cílový režim;
+2. 1920 × 1080 s nejbližší dostupnou snímkovou frekvencí;
+3. 1280 × 960 přibližně při 6 fps;
+4. 1280 × 720 přibližně při 9 fps;
+5. automatický režim zvolený Chromiem.
+
+Cílový režim je označen zeleně. Jakýkoli náhradní režim je označen oranžově. Panel vždy uvádí skutečné rozlišení a FPS z `MediaStreamTrack.getSettings()`.
+
+Chromium neuvádí, zda vstupní V4L2 stream používá YUYV nebo MJPEG. Pole **Pixelový formát / komprese** proto zobrazuje, že hodnotu nelze zjistit, namísto nespolehlivého odhadu.
 
 ## Funkce
 
-- požadavek na rozlišení a snímkovou frekvenci;
+- automatický výběr nejlepšího dostupného režimu snímání;
 - živý náhled kamery;
 - výběr oblasti spektra tažením myší;
 - průměrování pixelů ve svislém směru;
@@ -29,7 +43,7 @@ Potom otevři `http://localhost:8000` v Chromiu. Po stisknutí **Spustit kameru*
 
 ## Známá omezení
 
-- Chromium vybírá kameru a způsob snímání. Webová aplikace neumí zaručit V4L2 formát YUYV místo MJPEG.
+- Webová API neodhalují vstupní V4L2 pixelový formát ani kompresi.
 - Dostupnost jednotlivých ovládacích prvků závisí na kombinaci kamery, ovladače a prohlížeče.
 - Hodnoty získané přes `<video>` a `<canvas>` jsou již zpracované kamerou/prohlížečem a nejsou RAW hodnotami senzoru.
 - Kalibrace je zatím pouze lineární a dvoubodová.
@@ -37,7 +51,7 @@ Potom otevři `http://localhost:8000` v Chromiu. Po stisknutí **Spustit kameru*
 
 ## Doporučený test
 
-1. Spusť kameru v režimu 1920 × 1080 a 5 fps.
+1. Spusť kameru a zkontroluj zelený nebo oranžový panel režimu.
 2. Přepni expozici a white balance do manuálního režimu.
 3. Zkontroluj skutečné hodnoty v diagnostice.
 4. Vyber vodorovný pás obsahující spektrum.
