@@ -10,8 +10,8 @@ if (!document.querySelector(`link[href="${href}"]`)) {
   document.head.append(link);
 }
 
-// Od této chvíle aplikace nepoužívá hardwarové Auto. Kamera zůstává fyzicky
-// v ručním režimu a tlačítko Auto spouští pouze SW optimalizaci expozice.
+// Hardwarové Auto se v tomto prototypu nepoužívá. Kamera zůstává fyzicky
+// v ručním režimu a tlačítko Auto spouští jednorázovou SW optimalizaci.
 document.documentElement.dataset.softwareAutoExposure = "managed";
 
 installSoftwareAutoExposure();
