@@ -11,7 +11,9 @@ export function installAutoReadoutClarity() {
 
   const update = () => {
     scheduled = false;
-    if (updating || autoButton.getAttribute("aria-pressed") !== "true") return;
+    if (updating
+        || document.documentElement.dataset.softwareAutoExposure === "active"
+        || autoButton.getAttribute("aria-pressed") !== "true") return;
 
     updating = true;
 
