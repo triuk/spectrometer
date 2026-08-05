@@ -24,39 +24,28 @@
   <main class="app-grid">
     <section class="panel controls-panel" aria-labelledby="camera-heading">
       <h2 id="camera-heading">Kamera</h2>
-      <p class="hint">Po stisknutí tlačítka vybereš kameru v dialogu Chromia.</p>
-
-      <div class="field-grid compact">
-        <label>
-          Požadovaná šířka
-          <input id="requestedWidth" type="number" min="160" step="1" value="1920">
-        </label>
-        <label>
-          Požadovaná výška
-          <input id="requestedHeight" type="number" min="120" step="1" value="1080">
-        </label>
-        <label>
-          Požadované FPS
-          <input id="requestedFps" type="number" min="1" max="60" step="1" value="5">
-        </label>
-        <label>
-          Interval výpočtu
-          <select id="processingInterval">
-            <option value="100">100 ms</option>
-            <option value="200" selected>200 ms</option>
-            <option value="500">500 ms</option>
-            <option value="1000">1 s</option>
-          </select>
-        </label>
-      </div>
+      <p class="hint">Aplikace automaticky zkusí nejlepší režim pro kameru spektrometru.</p>
 
       <div class="button-row">
         <button id="startButton" type="button" class="button primary">Spustit kameru</button>
         <button id="stopButton" type="button" class="button secondary" disabled>Zastavit</button>
       </div>
 
+      <section id="captureModeStatus" class="capture-mode capture-mode-idle" aria-live="polite">
+        <div class="capture-mode-heading">
+          <strong>Režim snímání</strong>
+          <span id="captureModeBadge" class="capture-mode-badge">Čeká</span>
+        </div>
+        <dl class="capture-mode-grid">
+          <div><dt>Kamera</dt><dd id="captureCameraName">–</dd></div>
+          <div><dt>Rozlišení</dt><dd id="captureResolution">–</dd></div>
+          <div><dt>FPS</dt><dd id="captureFrameRate">–</dd></div>
+          <div><dt>Pixelový formát / komprese</dt><dd id="captureFormat">–</dd></div>
+        </dl>
+      </section>
+
       <p class="hint">
-        Prohlížeč neumí vynutit V4L2 formát YUYV. Skutečné rozlišení, FPS a další hodnoty jsou uvedeny v diagnostice.
+        Chromium nezpřístupňuje, zda V4L2 používá YUYV nebo MJPEG. Aplikace proto tuto hodnotu nezaměňuje za odhad.
       </p>
 
       <hr>
@@ -78,10 +67,21 @@
       <hr>
 
       <h2>Zpracování</h2>
-      <label>
-        Průměrovat snímků
-        <input id="averageFrames" type="number" min="1" max="64" step="1" value="8">
-      </label>
+      <div class="field-grid compact">
+        <label>
+          Interval výpočtu
+          <select id="processingInterval">
+            <option value="100">100 ms</option>
+            <option value="200" selected>200 ms</option>
+            <option value="500">500 ms</option>
+            <option value="1000">1 s</option>
+          </select>
+        </label>
+        <label>
+          Průměrovat snímků
+          <input id="averageFrames" type="number" min="1" max="64" step="1" value="8">
+        </label>
+      </div>
 
       <div class="checkbox-grid" aria-label="Zobrazené kanály">
         <label><input id="showLuminance" type="checkbox" checked> Jas</label>
