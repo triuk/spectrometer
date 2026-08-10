@@ -1,33 +1,45 @@
 import { setControlStatus, state } from "./core.js";
 
-export const MEASUREMENT_EXPOSURE_MAX = 1800;
+export const DEFAULT_MEASUREMENT_EXPOSURE_MAX = 1800;
 
 let timer = null;
 let applying = false;
 let lastCapability = null;
+let lastConfiguredMaximum = null;
 let hardwareMaximum = null;
 
 const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+function configuredMaximum() {
+  const profileMaximum = Number(state.instrumentProfile?.cameraSettings?.exposureMax);
+  return Number.isFinite(profileMaximum) && profileMaximum > 0
+    ? profileMaximum
+    : DEFAULT_MEASUREMENT_EXPOSURE_MAX;
+}
+
 function effectiveMaximum() {
   const capability = state.capabilities.exposureTime;
-  if (!capability || !Number.isFinite(Number(capability.max))) return null;
-  return Math.min(Number(capability.max), MEASUREMENT_EXPOSURE_MAX);
+  if (!capability) return null;
+  const hardware = Number(capability.hardwareMax ?? capability.max);
+  if (!Number.isFinite(hardware)) return null;
+  return Math.min(hardware, configuredMaximum());
 }
 
 function applyCapabilityLimit() {
   const capability = state.capabilities.exposureTime;
-  if (!capability || capability === lastCapability) return;
+  const configured = configuredMaximum();
+  if (!capability) return;
+  if (capability === lastCapability && configured === lastConfiguredMaximum) return;
 
   lastCapability = capability;
-  hardwareMaximum = Number(capability.max);
-  if (!Number.isFinite(hardwareMaximum) || hardwareMaximum <= MEASUREMENT_EXPOSURE_MAX) return;
+  lastConfiguredMaximum = configured;
+  hardwareMaximum = Number(capability.hardwareMax ?? capability.max);
+  if (!Number.isFinite(hardwareMaximum)) return;
 
-  // Zachováme původní maximum pro diagnostiku, ale všechny měřicí ovladače
-  // a algoritmy používají bezpečný rozsah do 180 ms při cílových 5 fps.
+  const maximum = Math.min(hardwareMaximum, configured);
   state.capabilities.exposureTime = {
     ...capability,
-    max: MEASUREMENT_EXPOSURE_MAX,
+    max: maximum,
     hardwareMax: hardwareMaximum,
   };
   lastCapability = state.capabilities.exposureTime;
@@ -72,7 +84,7 @@ async function enforceLimit() {
     const actual = Number(track.getSettings().exposureTime);
     updateInputs(Number.isFinite(actual) ? actual : maximum);
     setControlStatus(
-      `Expozice byla omezena na ${maximum} (180 ms); hardwarové maximum kamery je ${hardwareMaximum ?? "neznámé"}.`,
+      `Expozice byla omezena profilem na ${maximum} (${(maximum / 10).toFixed(0)} ms); hardwarové maximum kamery je ${hardwareMaximum ?? "neznámé"}.`,
     );
   } catch (error) {
     console.error(error);
