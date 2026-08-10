@@ -5,11 +5,12 @@ Webová aplikace pro kamerový **Little Garden Spectrometer**. Běží přímo v
 ## Funkce
 
 - živý náhled a výběr oblasti měření (ROI);
+- profily konkrétních spektrometrů s kamerou, ROI a kalibrací;
 - zobrazení R, G, B a jasového spektra;
 - ruční nastavení kamery a jednorázová SW optimalizace expozice;
 - průměrování snímků a odečet tmavého spektra;
 - dvoubodová kalibrace pixel–vlnová délka;
-- export CSV a uložení snímku PNG.
+- export CSV, profilu JSON a snímku PNG.
 
 ## Spuštění
 
@@ -23,7 +24,7 @@ python -m http.server 8000 -d prototype
 
 Potom otevřete `http://localhost:8000` v Chromiu. Přístup ke kameře vyžaduje HTTPS nebo `localhost`.
 
-## Poznámky
+Vestavěné profily jsou v `prototype/configs/`. Kalibrační pixely používají absolutní souřadnice obrazu kamery, takže horizontální posun ROI nemění kalibraci. Uživatelské profily lze importovat/exportovat jako JSON; vazba profilu na konkrétní USB kameru se ukládá jen lokálně v prohlížeči.
 
 Kamera při měření používá pevné ruční nastavení. Jas, kontrast, saturace, ostrost a vyvážení bílé se během měření nemají měnit, protože by ovlivnily tvar nebo intenzitu spektra.
 
