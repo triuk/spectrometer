@@ -30,6 +30,8 @@ Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkr�
 - crosshair zobrazuje přesnou vlnovou délku/pixel a intenzity aktivních kanálů;
 - při kalibrované ose X se zobrazuje spektrální barevné pozadí a výraznější barevný pás odpovídající aktuálně zobrazeným vlnovým délkám.
 
+Automatická detekce a popisky lokálních píků budou další pluginová vrstva nad uPlotem.
+
 ## Spuštění
 
 Prohlížeč musí stránku načítat přes HTTPS nebo z `localhost`. Nasazení projektu zajišťuje GitLab Pages.
