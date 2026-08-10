@@ -5,6 +5,7 @@ import { elements, setRunningControls } from "./core.js";
 import { startCamera, stopCamera } from "./camera.js";
 import { installCaptureStatusCorrection } from "./capture-status.js";
 import { installImageSettingsControls } from "./image-settings.js";
+import { installInstrumentProfiles } from "./instrument-profiles.js";
 import {
   beginRoiDrag,
   captureDarkSpectrum,
@@ -57,6 +58,7 @@ function bindEvents() {
   window.addEventListener("beforeunload", stopCamera);
 }
 
+await installInstrumentProfiles();
 installCaptureStatusCorrection();
 installImageSettingsControls();
 installAutoReadoutClarity();
