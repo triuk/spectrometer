@@ -15,8 +15,8 @@ if (!document.querySelector(`link[href="${href}"]`)) {
 // Auto/Ručně; samostatné tlačítko pouze jednorázově optimalizuje expozici.
 document.documentElement.dataset.softwareAutoExposure = "manual-measurement";
 
-// Nejdřív omezíme měřicí rozsah expozice na 1800 (180 ms). Optimalizátor
-// i ruční ovladače pak pracují se stejným bezpečným horním limitem.
+// Horní limit expozice je součást profilu spektrometru (výchozí 1800).
+// Optimalizátor i ruční ovladače pak pracují se stejným rozsahem.
 installExposureLimit();
 
 // Optimalizátor se instaluje před starší obsluhou tlačítka, aby jeho capture
