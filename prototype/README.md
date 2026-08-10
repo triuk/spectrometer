@@ -27,10 +27,21 @@ Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkr�
 - kolečkem se zoomuje kolem kurzoru;
 - `Shift` + tažení nebo prostřední tlačítko posouvá zobrazený rozsah;
 - dvojklik nebo tlačítko **Reset zoomu** obnoví celý rozsah;
-- crosshair zobrazuje přesnou vlnovou délku/pixel a intenzity aktivních kanálů;
+- crosshair zobrazuje přesnou vlnovou délku, absolutní pixel senzoru a intenzity aktivních kanálů;
 - při kalibrované ose X se zobrazuje spektrální barevné pozadí a výraznější barevný pás odpovídající aktuálně zobrazeným vlnovým délkám.
 
-Automatická detekce a popisky lokálních píků budou další pluginová vrstva nad uPlotem.
+### Píky a kalibrace
+
+Graf automaticky hledá lokální píky v jasovém spektru. Před detekcí se používá lehké vyhlazení a pík musí mít dostatečnou lokální prominenci, takže se neoznačuje každý jednotlivý šumový bod.
+
+- zobrazení píků lze vypnout;
+- citlivost má režimy **Nízká**, **Střední** a **Vysoká**;
+- při zoomu se zobrazují jen píky v aktuálním rozsahu;
+- počet popisků je omezen podle šířky grafu a přednost mají píky s vyšší prominencí;
+- kliknutí na označený pík zobrazí jeho přesnou polohu a intenzitu;
+- tlačítka **Kal. bod 1** a **Kal. bod 2** aktivují výběr kalibračního bodu; následující kliknutí na pík vloží jeho absolutní pixel senzoru do příslušného kalibračního pole.
+
+Vlnová délka kalibračního bodu se záměrně nedoplňuje automaticky: uživatel ji zadává podle známé charakteristické spektrální čáry použitého kalibračního zdroje.
 
 ## Spuštění
 
