@@ -18,56 +18,14 @@ import {
   stopProcessing,
 } from "./spectrum.js";
 
-const TARGET_CAMERA_LABEL = /USB 2\.0 Camera: USB-ZH/i;
 const SAVED_DEVICE_KEY = "spectrometer.cameraDeviceId";
-
-const CAPTURE_PROFILES = [
-  {
-    id: "optimal",
-    label: "Optimální",
-    constraints: {
-      width: { exact: 1920 },
-      height: { exact: 1080 },
-      frameRate: { exact: 5 },
-    },
-  },
-  {
-    id: "full-hd-fallback",
-    label: "Fallback Full HD",
-    constraints: {
-      width: { exact: 1920 },
-      height: { exact: 1080 },
-      frameRate: { ideal: 5 },
-    },
-  },
-  {
-    id: "1280x960-fallback",
-    label: "Fallback 1280 × 960",
-    constraints: {
-      width: { exact: 1280 },
-      height: { exact: 960 },
-      frameRate: { ideal: 6 },
-    },
-  },
-  {
-    id: "1280x720-fallback",
-    label: "Fallback 1280 × 720",
-    constraints: {
-      width: { exact: 1280 },
-      height: { exact: 720 },
-      frameRate: { ideal: 9 },
-    },
-  },
-  {
-    id: "automatic-fallback",
-    label: "Automatický fallback",
-    constraints: {
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      frameRate: { ideal: 5 },
-    },
-  },
-];
+const PROFILE_DEVICE_MAP_KEY = "spectrometer.cameraDeviceByProfile";
+const DEFAULT_CAMERA = {
+  labelContains: "USB-ZH",
+  width: 1920,
+  height: 1080,
+  frameRate: 5,
+};
 
 const MODE_CONTROLS = [
   ["exposureMode", "Režim expozice"],
@@ -82,6 +40,105 @@ const NUMERIC_CONTROLS = [
   ["saturation", "Saturace"],
   ["sharpness", "Ostrost"],
 ];
+
+function desiredCamera() {
+  const camera = state.instrumentProfile?.camera ?? {};
+  return {
+    labelContains: String(camera.labelContains ?? DEFAULT_CAMERA.labelContains),
+    width: Number(camera.width) || DEFAULT_CAMERA.width,
+    height: Number(camera.height) || DEFAULT_CAMERA.height,
+    frameRate: Number(camera.frameRate) || DEFAULT_CAMERA.frameRate,
+  };
+}
+
+function captureProfiles() {
+  const desired = desiredCamera();
+  return [
+    {
+      id: "profile-exact",
+      label: "Profil spektrometru",
+      constraints: {
+        width: { exact: desired.width },
+        height: { exact: desired.height },
+        frameRate: { exact: desired.frameRate },
+      },
+    },
+    {
+      id: "profile-ideal",
+      label: "Profil spektrometru – fallback",
+      constraints: {
+        width: { exact: desired.width },
+        height: { exact: desired.height },
+        frameRate: { ideal: desired.frameRate },
+      },
+    },
+    {
+      id: "1280x960-fallback",
+      label: "Fallback 1280 × 960",
+      constraints: {
+        width: { exact: 1280 },
+        height: { exact: 960 },
+        frameRate: { ideal: 6 },
+      },
+    },
+    {
+      id: "1280x720-fallback",
+      label: "Fallback 1280 × 720",
+      constraints: {
+        width: { exact: 1280 },
+        height: { exact: 720 },
+        frameRate: { ideal: 9 },
+      },
+    },
+    {
+      id: "automatic-fallback",
+      label: "Automatický fallback",
+      constraints: {
+        width: { ideal: desired.width },
+        height: { ideal: desired.height },
+        frameRate: { ideal: desired.frameRate },
+      },
+    },
+  ];
+}
+
+function readProfileDeviceMap() {
+  try {
+    const value = JSON.parse(localStorage.getItem(PROFILE_DEVICE_MAP_KEY) || "{}");
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function savedDeviceId() {
+  const profileId = state.instrumentProfile?.id;
+  if (profileId) return readProfileDeviceMap()[profileId] ?? null;
+  return localStorage.getItem(SAVED_DEVICE_KEY);
+}
+
+function rememberDeviceId(deviceId) {
+  if (!deviceId) return;
+  const profileId = state.instrumentProfile?.id;
+  if (!profileId) {
+    localStorage.setItem(SAVED_DEVICE_KEY, deviceId);
+    return;
+  }
+  const map = readProfileDeviceMap();
+  map[profileId] = deviceId;
+  localStorage.setItem(PROFILE_DEVICE_MAP_KEY, JSON.stringify(map));
+}
+
+function forgetSavedDevice() {
+  const profileId = state.instrumentProfile?.id;
+  if (!profileId) {
+    localStorage.removeItem(SAVED_DEVICE_KEY);
+    return;
+  }
+  const map = readProfileDeviceMap();
+  delete map[profileId];
+  localStorage.setItem(PROFILE_DEVICE_MAP_KEY, JSON.stringify(map));
+}
 
 function getCapabilities(track) {
   try {
@@ -98,16 +155,16 @@ async function waitForMetadata() {
 }
 
 async function requestCameraStream() {
-  const savedDeviceId = localStorage.getItem(SAVED_DEVICE_KEY);
-  if (savedDeviceId) {
+  const deviceId = savedDeviceId();
+  if (deviceId) {
     try {
       return await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { deviceId: { exact: savedDeviceId } },
+        video: { deviceId: { exact: deviceId } },
       });
     } catch (error) {
       console.warn("Saved camera is unavailable; falling back to the browser chooser.", error);
-      localStorage.removeItem(SAVED_DEVICE_KEY);
+      forgetSavedDevice();
     }
   }
 
@@ -115,7 +172,7 @@ async function requestCameraStream() {
 }
 
 async function selectBestCaptureProfile(track) {
-  for (const profile of CAPTURE_PROFILES) {
+  for (const profile of captureProfiles()) {
     try {
       await track.applyConstraints(profile.constraints);
       return profile;
@@ -131,24 +188,31 @@ async function selectBestCaptureProfile(track) {
   };
 }
 
+function labelMatchesProfile(label) {
+  const expected = desiredCamera().labelContains.trim().toLowerCase();
+  return !expected || label.toLowerCase().includes(expected);
+}
+
 function isOptimalCapture(profile, settings, label) {
+  const desired = desiredCamera();
   const frameRate = Number(settings.frameRate);
-  return profile.id === "optimal"
-    && TARGET_CAMERA_LABEL.test(label)
-    && settings.width === 1920
-    && settings.height === 1080
+  return profile.id === "profile-exact"
+    && labelMatchesProfile(label)
+    && settings.width === desired.width
+    && settings.height === desired.height
     && Number.isFinite(frameRate)
-    && Math.abs(frameRate - 5) < 0.15;
+    && Math.abs(frameRate - desired.frameRate) < 0.15;
 }
 
 function renderCaptureMode(profile) {
   const settings = state.track?.getSettings() ?? {};
   const label = state.track?.label || "Neznámá kamera";
+  const desired = desiredCamera();
   const optimal = isOptimalCapture(profile, settings, label);
   const frameRate = Number(settings.frameRate);
 
   elements.captureModeStatus.className = `capture-mode capture-mode-${optimal ? "optimal" : "fallback"}`;
-  elements.captureModeBadge.textContent = optimal ? "Optimální" : "Fallback";
+  elements.captureModeBadge.textContent = optimal ? "Profil OK" : "Fallback";
   elements.captureCameraName.textContent = label;
   elements.captureResolution.textContent = settings.width && settings.height
     ? `${settings.width} × ${settings.height}`
@@ -158,7 +222,7 @@ function renderCaptureMode(profile) {
     : "Nezjištěno";
   elements.captureFormat.textContent = "Nezjištěno – Chromium údaj neposkytuje";
   elements.captureModeStatus.title = optimal
-    ? "Kamera běží v cílovém režimu 1920 × 1080 při 5 fps."
+    ? `Kamera odpovídá profilu: ${desired.width} × ${desired.height} při ${desired.frameRate} fps.`
     : `Použit náhradní režim: ${profile.label}.`;
 }
 
@@ -185,7 +249,7 @@ export async function startCamera() {
     state.capabilities = getCapabilities(state.track);
 
     const settings = state.track.getSettings();
-    if (settings.deviceId) localStorage.setItem(SAVED_DEVICE_KEY, settings.deviceId);
+    if (settings.deviceId) rememberDeviceId(settings.deviceId);
 
     elements.video.srcObject = state.stream;
     await elements.video.play();
