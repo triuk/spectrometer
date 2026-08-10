@@ -49,6 +49,7 @@ export const state = {
   track: null,
   capabilities: {},
   captureProfile: null,
+  instrumentProfile: null,
   processingTimer: null,
   resizeObserver: null,
   roi: null,
