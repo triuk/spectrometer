@@ -6,6 +6,7 @@ import { startCamera, stopCamera } from "./camera.js";
 import { installCaptureStatusCorrection } from "./capture-status.js";
 import { installImageSettingsControls } from "./image-settings.js";
 import { installInstrumentProfiles } from "./instrument-profiles.js";
+import { installUPlotSpectrum } from "./uplot-spectrum.js";
 import {
   beginRoiDrag,
   captureDarkSpectrum,
@@ -59,6 +60,7 @@ function bindEvents() {
 }
 
 await installInstrumentProfiles();
+installUPlotSpectrum();
 installCaptureStatusCorrection();
 installImageSettingsControls();
 installAutoReadoutClarity();
