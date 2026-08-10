@@ -25,8 +25,10 @@ export function initialiseDefaultRoi() {
   state.spectrumHistory = [];
   state.averagedSpectrum = null;
   if (state.darkSpectrum) clearDarkSpectrum();
-  elements.pixel1.value = "0";
-  elements.pixel2.value = String(width - 1);
+  if (!state.instrumentProfile) {
+    elements.pixel1.value = String(state.roi.x);
+    elements.pixel2.value = String(state.roi.x + width - 1);
+  }
   updateRoiOutput();
   drawOverlay();
 }
@@ -253,12 +255,24 @@ function calibration() {
   const w2 = toFiniteNumber(elements.wavelength2.value, 700);
   if (p1 === p2) return null;
   const slope = (w2 - w1) / (p2 - p1);
-  return { pixel1: p1, pixel2: p2, wavelength1: w1, wavelength2: w2, slope, intercept: w1 - slope * p1 };
+  return {
+    coordinateSystem: "sensor",
+    pixel1: p1,
+    pixel2: p2,
+    wavelength1: w1,
+    wavelength2: w2,
+    slope,
+    intercept: w1 - slope * p1,
+  };
 }
 
-function wavelength(pixel) {
+function sensorPixel(roiPixel) {
+  return (state.roi?.x ?? 0) + roiPixel;
+}
+
+function wavelength(roiPixel) {
   const current = calibration();
-  return current ? current.slope * pixel + current.intercept : null;
+  return current ? current.slope * sensorPixel(roiPixel) + current.intercept : null;
 }
 
 function resizePlot() {
@@ -329,7 +343,7 @@ function drawGrid(margin, plotWidth, plotHeight, maximum, count, ratio) {
     const nm = wavelength(pixel);
     plotContext.textAlign = "center";
     plotContext.textBaseline = "top";
-    plotContext.fillText(nm === null ? String(pixel) : `${nm.toFixed(0)} nm`, margin.left + plotWidth * (i / 5), margin.top + plotHeight + 8 * ratio);
+    plotContext.fillText(nm === null ? String(sensorPixel(pixel)) : `${nm.toFixed(0)} nm`, margin.left + plotWidth * (i / 5), margin.top + plotHeight + 8 * ratio);
   }
   plotContext.restore();
 }
@@ -353,13 +367,14 @@ function updatePeak(values) {
   let peak = 0;
   for (let i = 1; i < values.length; i += 1) if (values[i] > values[peak]) peak = i;
   const nm = wavelength(peak);
-  elements.peakOutput.textContent = `Maximum: ${nm === null ? `pixel ${peak}` : `${nm.toFixed(1)} nm`}, ${values[peak].toFixed(1)}`;
+  const absolutePixel = sensorPixel(peak);
+  elements.peakOutput.textContent = `Maximum: ${nm === null ? `pixel ${absolutePixel}` : `${nm.toFixed(1)} nm`}, ${values[peak].toFixed(1)}`;
 }
 
 export function useRoiWidthForCalibration() {
   if (!state.roi) return;
-  elements.pixel1.value = "0";
-  elements.pixel2.value = String(state.roi.width - 1);
+  elements.pixel1.value = String(state.roi.x);
+  elements.pixel2.value = String(state.roi.x + state.roi.width - 1);
   drawPlot();
 }
 
@@ -368,6 +383,7 @@ export function exportCsv() {
   if (!spectrum || !state.roi) return;
   const metadata = {
     exportedAt: new Date().toISOString(),
+    instrumentProfile: state.instrumentProfile ? { id: state.instrumentProfile.id, name: state.instrumentProfile.name } : null,
     cameraLabel: state.track?.label ?? "",
     cameraSettings: state.track?.getSettings() ?? {},
     roi: state.roi,
@@ -375,10 +391,10 @@ export function exportCsv() {
     darkSubtraction: Boolean(elements.subtractDark.checked && state.darkSpectrum),
     calibration: calibration(),
   };
-  const lines = [`# metadata=${JSON.stringify(metadata)}`, "pixel,wavelength_nm,red,green,blue,luminance"];
+  const lines = [`# metadata=${JSON.stringify(metadata)}`, "roi_pixel,sensor_pixel,wavelength_nm,red,green,blue,luminance"];
   for (let i = 0; i < spectrum.luminance.length; i += 1) {
     const nm = wavelength(i);
-    lines.push([i, nm === null ? "" : nm.toFixed(6), ...CHANNELS.map((name) => spectrum[name][i].toFixed(6))].join(","));
+    lines.push([i, sensorPixel(i), nm === null ? "" : nm.toFixed(6), ...CHANNELS.map((name) => spectrum[name][i].toFixed(6))].join(","));
   }
   download(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }), `spectrum-${timestamp()}.csv`);
 }
