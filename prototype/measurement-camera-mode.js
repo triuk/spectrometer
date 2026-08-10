@@ -6,7 +6,7 @@ const TARGET_MIN = 205;
 const TARGET_MAX = 232;
 const MAX_STEPS = 14;
 const SETTLE_MS = 500;
-const FIXED = {
+const DEFAULT_FIXED = {
   colorTemperature: 4600,
   brightness: 0,
   contrast: 32,
@@ -76,12 +76,23 @@ function installStyles() {
   document.head.append(style);
 }
 
+function profileFixedSettings() {
+  const settings = state.instrumentProfile?.cameraSettings ?? {};
+  return {
+    colorTemperature: Number.isFinite(Number(settings.whiteBalance)) ? Number(settings.whiteBalance) : DEFAULT_FIXED.colorTemperature,
+    brightness: Number.isFinite(Number(settings.brightness)) ? Number(settings.brightness) : DEFAULT_FIXED.brightness,
+    contrast: Number.isFinite(Number(settings.contrast)) ? Number(settings.contrast) : DEFAULT_FIXED.contrast,
+    saturation: Number.isFinite(Number(settings.saturation)) ? Number(settings.saturation) : DEFAULT_FIXED.saturation,
+    sharpness: Number.isFinite(Number(settings.sharpness)) ? Number(settings.sharpness) : DEFAULT_FIXED.sharpness,
+  };
+}
+
 function fixedConstraints() {
   const values = {};
   if (supports("exposureMode", "manual")) values.exposureMode = "manual";
   if (supports("whiteBalanceMode", "manual")) values.whiteBalanceMode = "manual";
 
-  for (const [name, requested] of Object.entries(FIXED)) {
+  for (const [name, requested] of Object.entries(profileFixedSettings())) {
     const range = rangeFor(name);
     if (range) values[name] = quantize(requested, range);
   }
@@ -107,7 +118,7 @@ async function forceMeasurementMode(track, quiet = false) {
 
   configureUi();
   if (!quiet) {
-    setControlStatus("Pevný ruční režim je aktivní. Expozici lze nastavit ručně nebo jednorázově optimalizovat.");
+    setControlStatus("Pevný ruční režim z profilu je aktivní. Expozici lze nastavit ručně nebo jednorázově optimalizovat.");
   }
 }
 
@@ -263,7 +274,7 @@ export function installMeasurementCameraMode() {
 
   const help = document.querySelector("#imageSettingsHelp");
   if (help) {
-    help.textContent = "Kamera pracuje vždy v pevném ručním režimu. Tlačítko Optimalizovat expozici (SW) jednorázově nastaví pouze expoziční čas podle maxima ve vybrané ROI. Vyvážení bílé, jas, kontrast, saturace a ostrost jsou pevné.";
+    help.textContent = "Kamera pracuje vždy v pevném ručním režimu. Pevné hodnoty obrazu a horní limit expozice jsou součástí profilu spektrometru; tlačítko Optimalizovat expozici (SW) mění jen expoziční čas.";
   }
 
   elements.autoModeButton.addEventListener("click", (event) => {
