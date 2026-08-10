@@ -19,6 +19,17 @@ Kamera pracuje v pevném ručním režimu. Hardwarová automatická expozice ani
 
 Aplikace podporuje výběr ROI, R/G/B a jasové spektrum, průměrování, odečet tmavého spektra, dvoubodovou kalibraci, CSV export a uložení snímku PNG.
 
+## Graf spektra
+
+Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkrétní verzi; při nedostupnosti CDN zůstává jako fallback původní Canvas graf.
+
+- tažením levým tlačítkem se přiblíží vybraný rozsah osy X;
+- kolečkem se zoomuje kolem kurzoru;
+- `Shift` + tažení nebo prostřední tlačítko posouvá zobrazený rozsah;
+- dvojklik nebo tlačítko **Reset zoomu** obnoví celý rozsah;
+- crosshair zobrazuje přesnou vlnovou délku/pixel a intenzity aktivních kanálů;
+- při kalibrované ose X se zobrazuje spektrální barevné pozadí a výraznější barevný pás odpovídající aktuálně zobrazeným vlnovým délkám.
+
 ## Spuštění
 
 Prohlížeč musí stránku načítat přes HTTPS nebo z `localhost`. Nasazení projektu zajišťuje GitLab Pages.
