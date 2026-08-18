@@ -205,6 +205,10 @@ async function evaluate(track, requested, range, samples, id) {
 }
 
 async function optimizeExposure() {
+  if (state.exposureDiagnosticRunning) {
+    setControlStatus("Probíhá diagnostika expozice; optimalizace je dočasně vypnutá.", true);
+    return;
+  }
   if (!state.track || optimizing) return;
   const range = exposureRange();
   if (!range) {
