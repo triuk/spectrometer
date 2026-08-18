@@ -275,6 +275,11 @@ function wavelength(roiPixel) {
   return current ? current.slope * sensorPixel(roiPixel) + current.intercept : null;
 }
 
+function calibrationIsReversed() {
+  const current = calibration();
+  return Boolean(current && current.slope < 0);
+}
+
 function resizePlot() {
   const ratio = window.devicePixelRatio || 1;
   const width = Math.max(1, Math.round(elements.plotCanvas.clientWidth * ratio));
@@ -329,6 +334,7 @@ function drawGrid(margin, plotWidth, plotHeight, maximum, count, ratio) {
   plotContext.fillStyle = "#97a9bd";
   plotContext.lineWidth = ratio;
   plotContext.font = `${11 * ratio}px system-ui`;
+  const reversed = calibrationIsReversed();
   for (let i = 0; i <= 5; i += 1) {
     const y = margin.top + plotHeight * (i / 5);
     plotContext.beginPath();
@@ -339,11 +345,12 @@ function drawGrid(margin, plotWidth, plotHeight, maximum, count, ratio) {
     plotContext.textBaseline = "middle";
     plotContext.fillText((maximum * (1 - i / 5)).toFixed(0), margin.left - 7 * ratio, y);
 
-    const pixel = Math.round((count - 1) * (i / 5));
+    const fraction = i / 5;
+    const pixel = Math.round((count - 1) * (reversed ? 1 - fraction : fraction));
     const nm = wavelength(pixel);
     plotContext.textAlign = "center";
     plotContext.textBaseline = "top";
-    plotContext.fillText(nm === null ? String(sensorPixel(pixel)) : `${nm.toFixed(0)} nm`, margin.left + plotWidth * (i / 5), margin.top + plotHeight + 8 * ratio);
+    plotContext.fillText(nm === null ? String(sensorPixel(pixel)) : `${nm.toFixed(0)} nm`, margin.left + plotWidth * fraction, margin.top + plotHeight + 8 * ratio);
   }
   plotContext.restore();
 }
@@ -354,8 +361,10 @@ function drawChannel(values, color, margin, plotWidth, plotHeight, maximum) {
   plotContext.strokeStyle = color;
   plotContext.lineWidth = Math.max(1.2, window.devicePixelRatio || 1);
   plotContext.beginPath();
+  const reversed = calibrationIsReversed();
   for (let i = 0; i < values.length; i += 1) {
-    const x = margin.left + (i / (values.length - 1)) * plotWidth;
+    const fraction = (reversed ? values.length - 1 - i : i) / (values.length - 1);
+    const x = margin.left + fraction * plotWidth;
     const y = margin.top + (1 - values[i] / maximum) * plotHeight;
     if (!i) plotContext.moveTo(x, y); else plotContext.lineTo(x, y);
   }
@@ -390,6 +399,7 @@ export function exportCsv() {
     averagedFrames: state.spectrumHistory.length,
     darkSubtraction: Boolean(elements.subtractDark.checked && state.darkSpectrum),
     calibration: calibration(),
+    display: { reverseSpectrum: Boolean(state.reverseSpectrum) },
   };
   const lines = [`# metadata=${JSON.stringify(metadata)}`, "roi_pixel,sensor_pixel,wavelength_nm,red,green,blue,luminance"];
   for (let i = 0; i < spectrum.luminance.length; i += 1) {
