@@ -36,5 +36,12 @@
     "contrast": 32,
     "saturation": 50,
     "sharpness": 1
+  },
+  "exposureOptimization": {
+    "model": "piecewise-monotonic",
+    "discontinuityPeriod": 32,
+    "discontinuityOrigin": 0,
+    "freshFrames": 5,
+    "sampleFrames": 3
   }
 }
