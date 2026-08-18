@@ -50,7 +50,6 @@ export const state = {
   capabilities: {},
   captureProfile: null,
   instrumentProfile: null,
-  reverseSpectrum: false,
   processingTimer: null,
   resizeObserver: null,
   roi: null,
