@@ -9,7 +9,8 @@ Každý fyzický spektrometr má vlastní JSON profil v `configs/` nebo lokáln�
 - preferovanou kameru, rozlišení a FPS;
 - ROI;
 - lineární kalibrační body pixel → nm;
-- pevné nastavení obrazu a horní limit expozice.
+- pevné nastavení obrazu a horní limit expozice;
+- volitelný model odezvy expozice pro SW optimalizaci.
 
 Kalibrační pixely jsou absolutní souřadnice obrazu kamery, ne souřadnice uvnitř ROI. Profil lze importovat/exportovat jako JSON. Konkrétní `deviceId` USB kamery se do profilu neukládá; vazba profil → kamera zůstává pouze v daném prohlížeči.
 
@@ -17,22 +18,17 @@ Kalibrační pixely jsou absolutní souřadnice obrazu kamery, ne souřadnice uv
 
 Kamera pracuje v pevném ručním režimu. Hardwarová automatická expozice ani automatické vyvážení bílé se nepoužívají. Tlačítko **Optimalizovat expozici (SW)** jednorázově hledá vhodnou expozici podle maxima ve vybrané ROI a potom ji uzamkne.
 
+Pro kameru USB-ZH použitou ve výchozím LGS profilu diagnostický sweep ukázal deterministické poklesy intenzity na hranicích po 32 jednotkách expozičního času. Mezi těmito hranicemi je odezva prakticky monotónní. Profil proto používá model `piecewise-monotonic` s periodou 32. Optimalizace nejprve testuje bezpečné konce monotónních úseků, vybere první úsek schopný dosáhnout cílové intenzity a uvnitř něj expozici binárně doladí.
+
+Po změně expozice se nepoužívá pevné čekání v milisekundách. Aplikace čeká na nové video snímky přes `requestVideoFrameCallback()`, standardně změří 5 nových snímků a jako výsledek použije medián posledních 3. Tím se omezuje vliv opožděného projevení změny i kolísání jednotlivých snímků.
+
 Aplikace podporuje výběr ROI, R/G/B a jasové spektrum, průměrování, odečet tmavého spektra, dvoubodovou kalibraci, CSV export a uložení snímku PNG.
 
-### Diagnostika expozice
+## Diagnostika expozice
 
-Panel **Diagnostika expozice** slouží k proměření skutečné odezvy kamery na ruční expoziční čas. Výchozí sweep pokrývá celý dostupný měřicí rozsah po 25 jednotkách a provede průchod nahoru i dolů.
+Panel **Diagnostika expozice** umožňuje proměřit celý rozsah ruční expozice bez optimalizačních předpokladů. Sweep může běžet nahoru, dolů nebo oběma směry. Pro každý bod ukládá jednotlivé nové video snímky, požadovanou i skutečnou expozici, maximum R/G/B, celkové maximum, průměrný jas a podíl saturovaných pixelů.
 
-Po každé změně expozice se nepoužívá pevná čekací doba. Aplikace přes `requestVideoFrameCallback()` zaznamenává pouze skutečně nové video snímky a sleduje jejich ustálení. Pro každý snímek ukládá:
-
-- požadovanou a skutečnou expozici z `getSettings()`;
-- čas od aplikování nové hodnoty;
-- číslo/presentedFrames a mediaTime video snímku, pokud je Chromium poskytne;
-- maximum v ROI a samostatná maxima R/G/B;
-- průměrný jas ROI;
-- podíl saturovaných sloupců.
-
-Průchod nahoru a dolů umožňuje odhalit nejen nemonotónní odezvu a náhlé změny jasu, ale také případnou hysterézi. Souhrn automaticky vypíše velké skoky, neustálené body a rozdíly mezi oběma směry. Výsledky lze exportovat jako JSON s kompletními raw daty nebo CSV s jedním řádkem pro každý zaznamenaný video snímek. Po dokončení nebo zastavení se obnoví původní expozice.
+Výsledek lze exportovat jako JSON nebo CSV. JSON obsahuje i souhrnnou analýzu monotónních porušení, neustálených bodů a hystereze.
 
 ## Graf spektra
 
