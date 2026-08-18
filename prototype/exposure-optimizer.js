@@ -6,7 +6,9 @@ const TARGET_MIN = 205;
 const TARGET_MAX = 232;
 const INITIAL_PROBES = 8;
 const MAX_PROBES = 14;
-const SETTLE_MS = 650;
+const DEFAULT_FRESH_FRAMES = 5;
+const DEFAULT_SAMPLE_FRAMES = 3;
+const MAX_SEGMENT_REFINEMENTS = 6;
 
 let optimizing = false;
 let runId = 0;
@@ -111,7 +113,59 @@ function measurePeak() {
     if (count) peak = Math.max(peak, red / count, green / count, blue / count);
   }
 
-  return Math.round(peak);
+  return peak;
+}
+
+function median(values) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function optimizerProfile() {
+  const source = state.instrumentProfile?.exposureOptimization;
+  const period = Number(source?.discontinuityPeriod);
+  const origin = Number(source?.discontinuityOrigin ?? 0);
+  const freshFrames = Math.max(3, Math.round(Number(source?.freshFrames) || DEFAULT_FRESH_FRAMES));
+  const sampleFrames = clamp(
+    Math.round(Number(source?.sampleFrames) || DEFAULT_SAMPLE_FRAMES),
+    1,
+    freshFrames,
+  );
+
+  return {
+    model: source?.model ?? "generic",
+    period: Number.isFinite(period) && period > 0 ? period : null,
+    origin: Number.isFinite(origin) ? origin : 0,
+    freshFrames,
+    sampleFrames,
+  };
+}
+
+function nextVideoFrame() {
+  if (typeof elements.video.requestVideoFrameCallback === "function") {
+    return new Promise((resolve) => {
+      elements.video.requestVideoFrameCallback((_now, metadata) => resolve(metadata));
+    });
+  }
+
+  const fps = Number(state.track?.getSettings().frameRate) || 5;
+  return sleep(Math.max(40, 1000 / fps)).then(() => null);
+}
+
+async function measureFreshFrames(track, profile, id) {
+  const peaks = [];
+  for (let index = 0; index < profile.freshFrames; index += 1) {
+    await nextVideoFrame();
+    if (id !== runId || track !== state.track) return null;
+    const peak = measurePeak();
+    if (Number.isFinite(peak)) peaks.push(peak);
+  }
+
+  const usable = peaks.slice(-profile.sampleFrames);
+  const peak = median(usable);
+  return peak === null ? null : { peak, framePeaks: peaks };
 }
 
 function scoreSample(sample) {
@@ -126,6 +180,116 @@ function scoreSample(sample) {
 
 function bestSample(samples) {
   return [...samples].sort((a, b) => scoreSample(a) - scoreSample(b))[0] ?? null;
+}
+
+async function evaluate(track, requested, range, profile, samples, id, { force = false } = {}) {
+  if (id !== runId || track !== state.track) return null;
+  const targetExposure = quantize(requested, range);
+  const existing = samples.find((sample) => sample.exposure === targetExposure);
+  if (existing && !force) return existing;
+
+  await track.applyConstraints({
+    advanced: [{ exposureMode: "manual", exposureTime: targetExposure }],
+  });
+  if (id !== runId || track !== state.track) return null;
+
+  const actualSetting = Number(track.getSettings().exposureTime);
+  const exposure = Number.isFinite(actualSetting) ? actualSetting : targetExposure;
+  syncExposureControls(exposure);
+
+  const measurement = await measureFreshFrames(track, profile, id);
+  if (!measurement) return null;
+
+  const sample = {
+    exposure,
+    peak: measurement.peak,
+    framePeaks: measurement.framePeaks,
+  };
+
+  const previousIndex = samples.findIndex((item) => item.exposure === exposure);
+  if (previousIndex >= 0) samples[previousIndex] = sample;
+  else samples.push(sample);
+  return sample;
+}
+
+function piecewiseSegments(range, profile) {
+  if (!profile.period || profile.period <= range.step) return [];
+  const segments = [];
+  let index = Math.floor((range.min - profile.origin) / profile.period);
+  let guard = 0;
+
+  while (guard++ < 10000) {
+    const rawStart = profile.origin + index * profile.period;
+    const rawEnd = profile.origin + (index + 1) * profile.period - range.step;
+    const start = quantize(Math.max(range.min, rawStart), range);
+    const end = quantize(Math.min(range.max, rawEnd), range);
+    if (end >= start) segments.push({ index, start, end });
+    if (rawEnd >= range.max) break;
+    index += 1;
+  }
+
+  if (segments.length) {
+    const last = segments[segments.length - 1];
+    if (last.end < range.max) {
+      const nextStart = quantize(Math.max(range.min, profile.origin + (last.index + 1) * profile.period), range);
+      if (nextStart <= range.max) segments.push({ index: last.index + 1, start: nextStart, end: range.max });
+    }
+  }
+  return segments;
+}
+
+async function optimizePiecewise(track, range, profile, samples, id) {
+  const segments = piecewiseSegments(range, profile);
+  if (!segments.length) return null;
+
+  let targetSegment = null;
+  let highestBelow = null;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    if (id !== runId || track !== state.track) return null;
+    const segment = segments[index];
+    const sample = await evaluate(track, segment.end, range, profile, samples, id);
+    if (!sample) continue;
+
+    setControlStatus(
+      `Hledám monotónní úsek ${index + 1}/${segments.length}: expozice ${sample.exposure}, maximum ${sample.peak.toFixed(1)}/255.`,
+    );
+
+    if (!highestBelow || sample.peak > highestBelow.peak) highestBelow = sample;
+    if (sample.peak >= TARGET) {
+      targetSegment = segment;
+      break;
+    }
+  }
+
+  if (!targetSegment) return bestSample(samples) ?? highestBelow;
+
+  let low = targetSegment.start;
+  let high = targetSegment.end;
+  let highSample = samples.find((sample) => sample.exposure === high) ?? null;
+
+  for (let refinement = 0; refinement < MAX_SEGMENT_REFINEMENTS && high - low > range.step; refinement += 1) {
+    const midpoint = quantize((low + high) / 2, range);
+    if (midpoint <= low || midpoint >= high) break;
+    const sample = await evaluate(track, midpoint, range, profile, samples, id);
+    if (!sample) break;
+
+    setControlStatus(
+      `Dolaďuji úsek ${targetSegment.start}–${targetSegment.end}: expozice ${sample.exposure}, maximum ${sample.peak.toFixed(1)}/255.`,
+    );
+
+    if (sample.peak >= TARGET) {
+      high = sample.exposure;
+      highSample = sample;
+    } else {
+      low = sample.exposure;
+    }
+  }
+
+  const segmentSamples = samples.filter(
+    (sample) => sample.exposure >= targetSegment.start && sample.exposure <= targetSegment.end,
+  );
+  return bestSample(segmentSamples) ?? highSample ?? bestSample(samples);
 }
 
 function initialCandidates(range, current) {
@@ -157,9 +321,7 @@ function refinementCandidate(samples, range) {
   intervals.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
   for (const [low, high] of intervals) {
     if (high - low <= range.step) continue;
-    const midpoint = low > 0
-      ? Math.sqrt(low * high)
-      : (low + high) / 2;
+    const midpoint = low > 0 ? Math.sqrt(low * high) : (low + high) / 2;
     const candidate = quantize(midpoint, range);
     if (!samples.some((sample) => sample.exposure === candidate)) return candidate;
   }
@@ -167,41 +329,28 @@ function refinementCandidate(samples, range) {
   return null;
 }
 
-function findDiscontinuity(samples) {
-  const sorted = [...samples].sort((a, b) => a.exposure - b.exposure);
-  for (let index = 1; index < sorted.length; index += 1) {
-    const previous = sorted[index - 1];
-    const current = sorted[index];
-    if (current.peak < previous.peak * 0.65) {
-      return { before: previous, after: current };
-    }
+async function optimizeGeneric(track, range, profile, samples, id, current) {
+  const candidates = initialCandidates(range, current);
+  for (const candidate of candidates) {
+    if (samples.length >= MAX_PROBES || id !== runId || track !== state.track) return null;
+    const sample = await evaluate(track, candidate, range, profile, samples, id);
+    if (!sample) continue;
+    setControlStatus(
+      `Mapuji expozici ${samples.length}/${MAX_PROBES}: ${sample.exposure}, maximum ${sample.peak.toFixed(1)}/255.`,
+    );
   }
-  return null;
-}
 
-async function applyExposure(track, requested, range) {
-  await track.applyConstraints({
-    advanced: [{ exposureMode: "manual", exposureTime: quantize(requested, range) }],
-  });
-  await sleep(SETTLE_MS);
-  const actual = Number(track.getSettings().exposureTime);
-  const value = Number.isFinite(actual) ? actual : quantize(requested, range);
-  syncExposureControls(value);
-  return value;
-}
+  while (samples.length < MAX_PROBES) {
+    const candidate = refinementCandidate(samples, range);
+    if (candidate === null) break;
+    const sample = await evaluate(track, candidate, range, profile, samples, id);
+    if (!sample) break;
+    setControlStatus(
+      `Zpřesňuji expozici ${samples.length}/${MAX_PROBES}: ${sample.exposure}, maximum ${sample.peak.toFixed(1)}/255.`,
+    );
+  }
 
-async function evaluate(track, requested, range, samples, id) {
-  if (id !== runId || track !== state.track) return null;
-  const exposure = await applyExposure(track, requested, range);
-  if (id !== runId || track !== state.track) return null;
-  const peak = measurePeak();
-  if (peak === null) return null;
-
-  const existing = samples.find((sample) => sample.exposure === exposure);
-  if (existing) existing.peak = peak;
-  else samples.push({ exposure, peak });
-
-  return { exposure, peak };
+  return bestSample(samples);
 }
 
 async function optimizeExposure() {
@@ -221,46 +370,31 @@ async function optimizeExposure() {
   const track = state.track;
   const samples = [];
   const current = Number(track.getSettings().exposureTime) || range.min;
+  const profile = optimizerProfile();
 
   setBusy(true);
   busyTimer = window.setInterval(() => setBusy(true), 100);
   if (state.darkSpectrum) clearDarkSpectrum();
 
   try {
-    const candidates = initialCandidates(range, current);
-    for (const candidate of candidates) {
-      if (samples.length >= MAX_PROBES || id !== runId || track !== state.track) return;
-      const sample = await evaluate(track, candidate, range, samples, id);
-      if (!sample) continue;
-      setControlStatus(
-        `Mapuji expozici ${samples.length}/${MAX_PROBES}: ${sample.exposure}, maximum ${sample.peak}/255.`,
-      );
-    }
-
-    while (samples.length < MAX_PROBES) {
-      const candidate = refinementCandidate(samples, range);
-      if (candidate === null) break;
-      const sample = await evaluate(track, candidate, range, samples, id);
-      if (!sample) break;
-      setControlStatus(
-        `Zpřesňuji expozici ${samples.length}/${MAX_PROBES}: ${sample.exposure}, maximum ${sample.peak}/255.`,
-      );
-    }
+    const piecewise = profile.model === "piecewise-monotonic" && profile.period;
+    const best = piecewise
+      ? await optimizePiecewise(track, range, profile, samples, id)
+      : await optimizeGeneric(track, range, profile, samples, id, current);
 
     if (id !== runId || track !== state.track) return;
-    const best = bestSample(samples);
     if (!best) throw new Error("nepodařilo se získat platné měření");
 
-    const finalExposure = await applyExposure(track, best.exposure, range);
-    const finalPeak = measurePeak();
-    const discontinuity = findDiscontinuity(samples);
-    const note = discontinuity
-      ? ` Zjištěn skok jasu mezi expozicí ${discontinuity.before.exposure} a ${discontinuity.after.exposure}.`
-      : "";
+    setControlStatus(`Ověřuji expozici ${best.exposure} na nových snímcích…`);
+    const final = await evaluate(track, best.exposure, range, profile, samples, id, { force: true });
+    if (!final) throw new Error("nepodařilo se ověřit výslednou expozici");
 
+    const modelNote = piecewise
+      ? ` Použit model monotónních úseků s periodou ${profile.period}.`
+      : "";
     setControlStatus(
-      `Expozice ${finalExposure} je uzamčena; maximum ${finalPeak ?? best.peak}/255.${note}`,
-      finalPeak !== null && finalPeak > 245,
+      `Expozice ${final.exposure} je uzamčena; maximum ${final.peak.toFixed(1)}/255.${modelNote}`,
+      final.peak > 245,
     );
   } catch (error) {
     console.error(error);
