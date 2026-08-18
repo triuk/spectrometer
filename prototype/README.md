@@ -10,7 +10,8 @@ Každý fyzický spektrometr má vlastní JSON profil v `configs/` nebo lokáln�
 - ROI;
 - lineární kalibrační body pixel → nm;
 - pevné nastavení obrazu a horní limit expozice;
-- volitelný model odezvy expozice pro SW optimalizaci.
+- volitelný model odezvy expozice pro SW optimalizaci;
+- orientaci spektra.
 
 Kalibrační pixely jsou absolutní souřadnice obrazu kamery, ne souřadnice uvnitř ROI. Profil lze importovat/exportovat jako JSON. Konkrétní `deviceId` USB kamery se do profilu neukládá; vazba profil → kamera zůstává pouze v daném prohlížeči.
 
@@ -38,6 +39,7 @@ Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkr�
 - kolečkem se zoomuje kolem kurzoru;
 - `Shift` + tažení nebo prostřední tlačítko posouvá zobrazený rozsah;
 - dvojklik nebo tlačítko **Reset zoomu** obnoví celý rozsah;
+- přepínač **Obrátit spektrum** prohodí vlnové délky mezi kalibračními body 1 a 2; fyzické pixely senzoru se nemění;
 - crosshair zobrazuje přesnou vlnovou délku, absolutní pixel senzoru a intenzity aktivních kanálů;
 - při kalibrované ose X se zobrazuje spektrální barevné pozadí a výraznější barevný pás odpovídající aktuálně zobrazeným vlnovým délkám.
 
