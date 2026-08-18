@@ -241,11 +241,15 @@ export async function applyInstrumentProfile(profile = state.instrumentProfile) 
 function activate(profile, source, applyNow = true) {
   validateProfile(profile);
   state.instrumentProfile = clone(profile);
+  state.reverseSpectrum = Boolean(profile.display?.reverseSpectrum);
   activeSource = source;
   localStorage.setItem(SELECTED_PROFILE_KEY, profile.id);
   refreshSelect();
   ui.select.value = profile.id;
   ui.status.textContent = `Aktivní profil: ${profile.name}`;
+  window.dispatchEvent(new CustomEvent("spectrometer:spectrum-orientation", {
+    detail: { reverseSpectrum: state.reverseSpectrum },
+  }));
   if (applyNow) void applyInstrumentProfile(state.instrumentProfile);
 }
 
@@ -307,6 +311,11 @@ function buildCurrentProfile({ id, name }) {
       contrast: Number.isFinite(Number(cameraSettings.contrast)) ? Number(cameraSettings.contrast) : Number(base.cameraSettings?.contrast) || 32,
       saturation: Number.isFinite(Number(cameraSettings.saturation)) ? Number(cameraSettings.saturation) : Number(base.cameraSettings?.saturation) || 50,
       sharpness: Number.isFinite(Number(cameraSettings.sharpness)) ? Number(cameraSettings.sharpness) : Number(base.cameraSettings?.sharpness) || 1,
+    },
+    exposureOptimization: base.exposureOptimization ? clone(base.exposureOptimization) : undefined,
+    display: {
+      ...(base.display ?? {}),
+      reverseSpectrum: Boolean(state.reverseSpectrum),
     },
   });
 }
