@@ -19,6 +19,21 @@ Kamera pracuje v pevném ručním režimu. Hardwarová automatická expozice ani
 
 Aplikace podporuje výběr ROI, R/G/B a jasové spektrum, průměrování, odečet tmavého spektra, dvoubodovou kalibraci, CSV export a uložení snímku PNG.
 
+### Diagnostika expozice
+
+Panel **Diagnostika expozice** slouží k proměření skutečné odezvy kamery na ruční expoziční čas. Výchozí sweep pokrývá celý dostupný měřicí rozsah po 25 jednotkách a provede průchod nahoru i dolů.
+
+Po každé změně expozice se nepoužívá pevná čekací doba. Aplikace přes `requestVideoFrameCallback()` zaznamenává pouze skutečně nové video snímky a sleduje jejich ustálení. Pro každý snímek ukládá:
+
+- požadovanou a skutečnou expozici z `getSettings()`;
+- čas od aplikování nové hodnoty;
+- číslo/presentedFrames a mediaTime video snímku, pokud je Chromium poskytne;
+- maximum v ROI a samostatná maxima R/G/B;
+- průměrný jas ROI;
+- podíl saturovaných sloupců.
+
+Průchod nahoru a dolů umožňuje odhalit nejen nemonotónní odezvu a náhlé změny jasu, ale také případnou hysterézi. Souhrn automaticky vypíše velké skoky, neustálené body a rozdíly mezi oběma směry. Výsledky lze exportovat jako JSON s kompletními raw daty nebo CSV s jedním řádkem pro každý zaznamenaný video snímek. Po dokončení nebo zastavení se obnoví původní expozice.
+
 ## Graf spektra
 
 Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkrétní verzi; při nedostupnosti CDN zůstává jako fallback původní Canvas graf.
