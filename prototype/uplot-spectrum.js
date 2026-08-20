@@ -44,6 +44,7 @@ let panning = null;
 let currentPeaks = [];
 let currentSensorPixels = [];
 let activeCalibrationTarget = null;
+let scalingY = false;
 
 function addStylesheet(href, id) {
   if (document.querySelector(`#${id}`)) return;
@@ -150,7 +151,6 @@ function ensureHost() {
 
     peakStatus = document.createElement("span");
     peakStatus.className = "spectrum-peak-status";
-    peakStatus.textContent = "";
 
     toolbar.append(peakLabel, sensitivityLabel, calibration1Button, calibration2Button, peakStatus);
     host.after(toolbar);
@@ -265,7 +265,6 @@ function wavelengthRgb(wavelength) {
   let red = 0;
   let green = 0;
   let blue = 0;
-
   if (wavelength < 440) {
     red = -(wavelength - 440) / 60;
     blue = 1;
@@ -317,7 +316,6 @@ function updateSpectralLayers(u) {
     colorStrip.hidden = true;
     return;
   }
-
   background.style.background = spectralGradient(min, max, 0.095);
   colorStrip.style.background = spectralGradient(min, max, 0.9);
   colorStrip.hidden = false;
@@ -329,7 +327,6 @@ function smoothValues(values, radius = 2) {
   let sum = 0;
   let left = 0;
   let right = -1;
-
   for (let index = 0; index < values.length; index += 1) {
     const targetLeft = Math.max(0, index - radius);
     const targetRight = Math.min(values.length - 1, index + radius);
@@ -366,16 +363,13 @@ function detectPeaks(xValues, values, sensorPixels) {
       rightMinimum = Math.min(rightMinimum, smoothed[index + offset]);
     }
 
-    const baseline = Math.max(leftMinimum, rightMinimum);
-    const prominence = value - baseline;
+    const prominence = value - Math.max(leftMinimum, rightMinimum);
     if (prominence < minimumProminence) continue;
-
     candidates.push({
       index,
       x: Number(xValues[index]),
       sensorPixel: Number(sensorPixels[index]),
       value: Number(values[index]),
-      smoothedValue: value,
       prominence,
     });
   }
@@ -410,7 +404,6 @@ function visiblePeakSelection(u) {
   const ranked = [...visible].sort((a, b) => b.prominence - a.prominence || b.value - a.value);
   const chosen = [];
   const occupied = [];
-
   for (const peak of ranked) {
     const x = u.valToPos(peak.x, "x");
     if (!Number.isFinite(x)) continue;
@@ -420,6 +413,18 @@ function visiblePeakSelection(u) {
     if (chosen.length >= maximumLabels) break;
   }
   return chosen.sort((a, b) => a.x - b.x);
+}
+
+function positionPeakLabel(label, left, top, width) {
+  const half = label.offsetWidth / 2;
+  if (left < half + 4) label.style.transform = "translateX(0)";
+  else if (left > width - half - 4) label.style.transform = "translateX(-100%)";
+
+  const labelHeight = label.offsetHeight;
+  if (top < labelHeight + 24) {
+    label.style.bottom = "auto";
+    label.style.top = "12px";
+  }
 }
 
 function renderPeakMarkers(u) {
@@ -435,10 +440,19 @@ function renderPeakMarkers(u) {
     const marker = document.createElement("button");
     marker.type = "button";
     marker.className = "spectrum-peak-marker";
-    marker.style.left = `${left}px`;
-    marker.style.top = `${Math.max(4, top)}px`;
+    marker.style.left = `${Math.max(1, Math.min(u.over.clientWidth - 1, left))}px`;
+    marker.style.top = `${Math.max(4, Math.min(u.over.clientHeight - 4, top))}px`;
     marker.title = `${chartCalibrated ? `${peak.x.toFixed(2)} nm` : `pixel ${peak.sensorPixel}`} · intenzita ${peak.value.toFixed(1)} · prominence ${peak.prominence.toFixed(1)}`;
-    marker.innerHTML = `<span class="spectrum-peak-stem"></span><span class="spectrum-peak-dot"></span><span class="spectrum-peak-label">${chartCalibrated ? `${peak.x.toFixed(1)} nm` : `px ${Math.round(peak.sensorPixel)}`}</span>`;
+
+    const stem = document.createElement("span");
+    stem.className = "spectrum-peak-stem";
+    const dot = document.createElement("span");
+    dot.className = "spectrum-peak-dot";
+    const label = document.createElement("span");
+    label.className = "spectrum-peak-label";
+    label.textContent = chartCalibrated ? `${peak.x.toFixed(1)} nm` : `px ${Math.round(peak.sensorPixel)}`;
+    marker.append(stem, dot, label);
+
     marker.addEventListener("mousedown", event => event.stopPropagation());
     marker.addEventListener("click", event => {
       event.preventDefault();
@@ -446,6 +460,7 @@ function renderPeakMarkers(u) {
       selectPeak(peak);
     });
     peakLayer.append(marker);
+    positionPeakLabel(label, left, top, u.over.clientWidth);
   }
 
   if (peakStatus && !activeCalibrationTarget) {
@@ -481,6 +496,36 @@ function selectPeak(peak) {
   calibration2Button?.classList.remove("active");
 }
 
+function autoScaleY(u) {
+  if (!u?.data?.[0]?.length || scalingY) return;
+  const xValues = u.data[0];
+  const minX = Number.isFinite(Number(u.scales.x.min)) ? Number(u.scales.x.min) : xValues[0];
+  const maxX = Number.isFinite(Number(u.scales.x.max)) ? Number(u.scales.x.max) : xValues[xValues.length - 1];
+  const visibility = seriesVisibility();
+  let maximum = 0;
+
+  for (let index = 0; index < xValues.length; index += 1) {
+    const x = Number(xValues[index]);
+    if (x < minX || x > maxX) continue;
+    for (let seriesIndex = 0; seriesIndex < visibility.length; seriesIndex += 1) {
+      if (!visibility[seriesIndex]) continue;
+      const value = Number(u.data[seriesIndex + 1]?.[index]);
+      if (Number.isFinite(value)) maximum = Math.max(maximum, value);
+    }
+  }
+
+  const nextMax = Math.max(1, Math.min(255, maximum > 0 ? maximum * 1.10 : 1));
+  const currentMax = Number(u.scales.y.max);
+  if (Number.isFinite(currentMax) && Math.abs(currentMax - nextMax) < 0.25) return;
+
+  scalingY = true;
+  try {
+    u.setScale("y", { min: 0, max: nextMax });
+  } finally {
+    scalingY = false;
+  }
+}
+
 function spectralPlugin() {
   return {
     hooks: {
@@ -494,13 +539,15 @@ function spectralPlugin() {
         u.under.prepend(background);
         u.over.append(colorStrip, peakLayer);
         updateSpectralLayers(u);
+        autoScaleY(u);
         renderPeakMarkers(u);
       }],
       draw: [u => {
         updateSpectralLayers(u);
         renderPeakMarkers(u);
       }],
-      setScale: [u => {
+      setScale: [(u, key) => {
+        if (key === "x") autoScaleY(u);
         updateSpectralLayers(u);
         renderPeakMarkers(u);
       }],
@@ -546,15 +593,8 @@ function updateTooltip(u) {
     : `pixel ${Math.round(xValue)}`;
   tooltip.innerHTML = `<strong>${heading}</strong>${rows.join("")}`;
   tooltip.hidden = false;
-
-  const left = Math.min(
-    Math.max(6, Number(u.cursor.left) + 14),
-    Math.max(6, u.over.clientWidth - tooltip.offsetWidth - 6),
-  );
-  const top = Math.min(
-    Math.max(6, Number(u.cursor.top) + 14),
-    Math.max(6, u.over.clientHeight - tooltip.offsetHeight - 18),
-  );
+  const left = Math.min(Math.max(6, Number(u.cursor.left) + 14), Math.max(6, u.over.clientWidth - tooltip.offsetWidth - 6));
+  const top = Math.min(Math.max(6, Number(u.cursor.top) + 14), Math.max(6, u.over.clientHeight - tooltip.offsetHeight - 18));
   tooltip.style.left = `${left}px`;
   tooltip.style.top = `${top}px`;
 }
@@ -573,6 +613,7 @@ function clampDomain(min, max) {
 function resetZoom() {
   if (!chart || !fullDomain) return;
   chart.setScale("x", { min: fullDomain[0], max: fullDomain[1] });
+  autoScaleY(chart);
 }
 
 function installInteractions(u) {
@@ -653,9 +694,7 @@ function createChart(uPlotClass, data, calibrated) {
     height: Math.max(240, Math.round(host.clientHeight)),
     scales: {
       x: { time: false },
-      y: {
-        range: (_u, _min, max) => [0, Math.min(255, Math.max(1, max * 1.06))],
-      },
+      y: { range: (_u, _min, max) => [0, Math.max(1, Math.min(255, max * 1.10))] },
     },
     axes: [
       {
@@ -692,13 +731,12 @@ function createChart(uPlotClass, data, calibrated) {
       drag: { x: true, y: false, setScale: true },
     },
     plugins: [spectralPlugin(), tooltipPlugin()],
-    hooks: {
-      ready: [u => installInteractions(u)],
-    },
+    hooks: { ready: [u => installInteractions(u)] },
   };
 
   chart = new uPlotClass(options, data, host);
   recomputePeaks();
+  autoScaleY(chart);
   renderPeakMarkers(chart);
   if (resetButton) resetButton.disabled = false;
 
@@ -708,7 +746,10 @@ function createChart(uPlotClass, data, calibrated) {
     if (!entry || !chart) return;
     const width = Math.max(320, Math.round(entry.contentRect.width));
     const height = Math.max(240, Math.round(entry.contentRect.height));
-    if (chart.width !== width || chart.height !== height) chart.setSize({ width, height });
+    if (chart.width !== width || chart.height !== height) {
+      chart.setSize({ width, height });
+      autoScaleY(chart);
+    }
   });
   resizeObserver.observe(host);
 }
@@ -717,10 +758,9 @@ function updateSeriesVisibility() {
   if (!chart) return;
   const visibility = seriesVisibility();
   for (let index = 0; index < visibility.length; index += 1) {
-    if (chart.series[index + 1].show !== visibility[index]) {
-      chart.setSeries(index + 1, { show: visibility[index] });
-    }
+    if (chart.series[index + 1].show !== visibility[index]) chart.setSeries(index + 1, { show: visibility[index] });
   }
+  autoScaleY(chart);
 }
 
 function renderCurrentSpectrum(uPlotClass) {
@@ -757,12 +797,13 @@ function renderCurrentSpectrum(uPlotClass) {
     return;
   }
 
-  const resetScales = signature !== lastSignature;
-  chart.setData(prepared.data, resetScales);
+  const resetX = signature !== lastSignature;
+  chart.setData(prepared.data, false);
   recomputePeaks();
   updateSeriesVisibility();
-  if (resetScales) chart.setScale("x", { min: prepared.domain[0], max: prepared.domain[1] });
-  else renderPeakMarkers(chart);
+  if (resetX) chart.setScale("x", { min: prepared.domain[0], max: prepared.domain[1] });
+  autoScaleY(chart);
+  renderPeakMarkers(chart);
   lastSignature = signature;
   if (emptyState) emptyState.hidden = true;
 }
@@ -786,7 +827,6 @@ function refreshNeeded() {
   const changed = state.averagedSpectrum !== lastSpectrum
     || state.darkSpectrum !== lastDarkSpectrum
     || calibrationSignature !== refreshNeeded.signature;
-
   lastSpectrum = state.averagedSpectrum;
   lastDarkSpectrum = state.darkSpectrum;
   refreshNeeded.signature = calibrationSignature;
@@ -796,7 +836,6 @@ refreshNeeded.signature = "";
 
 export function installUPlotSpectrum() {
   ensureHost();
-
   loadUPlot()
     .then(uPlotClass => {
       activateUPlot();
