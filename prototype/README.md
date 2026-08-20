@@ -13,9 +13,11 @@ Každý fyzický spektrometr má vlastní JSON profil v `configs/` nebo lokáln�
 - pevné nastavení obrazu a horní limit expozice;
 - volitelný model odezvy expozice pro SW optimalizaci.
 
-U výchozího LGS profilu je potvrzeno, že spektrum je na ose X kamery snímáno obráceně. Profil proto používá `sensorOrientation.flipX: true`. ROI zůstává v raw souřadnicích náhledu kamery, ale před kalibrací se X senzoru převádí na zrcadlenou spektrální souřadnici `x_spectrum = width - 1 - x_raw`. Uživatelský přepínač orientace proto není potřeba.
+U výchozího LGS profilu je potvrzeno, že spektrum je na ose X kamery snímáno obráceně. Profil proto používá `sensorOrientation.flipX: true`. Uživatelský přepínač orientace není potřeba.
 
-Kalibrační pixely jsou absolutní spektrální souřadnice celého senzoru, ne souřadnice uvnitř ROI. Profil lze importovat/exportovat jako JSON. Starší lokální profily bez `sensorOrientation` se při načtení převedou na nový souřadný systém. Konkrétní `deviceId` USB kamery se do profilu neukládá; vazba profil → kamera zůstává pouze v daném prohlížeči.
+Uživatelský souřadnicový systém je jednotný: vlevo v náhledu kamery odpovídá vlevo v grafu spektra. Profil ukládá ROI i kalibrační pixely ve spektrální orientaci. Náhled kamery se podle `sensorOrientation` vizuálně zrcadlí. Za běhu je `state.roi` záměrně převedena zpět na raw souřadnice kamery, protože ty přímo používá `getImageData()`, optimalizace expozice a expoziční diagnostika. Převod mezi systémy je `x_spectrum = width - 1 - x_raw`.
+
+Kalibrační pixely jsou absolutní spektrální souřadnice celého senzoru, ne souřadnice uvnitř ROI. Profil lze importovat/exportovat jako JSON. Starší lokální profily se při načtení převedou na nový souřadný systém. Konkrétní `deviceId` USB kamery se do profilu neukládá; vazba profil → kamera zůstává pouze v daném prohlížeči.
 
 ## Měření
 
@@ -25,7 +27,7 @@ Pro kameru USB-ZH použitou ve výchozím LGS profilu diagnostický sweep ukáza
 
 Po změně expozice se nepoužívá pevné čekání v milisekundách. Aplikace čeká na nové video snímky přes `requestVideoFrameCallback()`, standardně změří 5 nových snímků a jako výsledek použije medián posledních 3. Tím se omezuje vliv opožděného projevení změny i kolísání jednotlivých snímků.
 
-Aplikace podporuje výběr ROI, R/G/B a jasové spektrum, průměrování, odečet tmavého spektra, dvoubodovou kalibraci, CSV export a uložení snímku PNG.
+Aplikace podporuje výběr ROI, R/G/B a jasové spektrum, průměrování, odečet tmavého spektra, dvoubodovou kalibraci, CSV export a uložení snímku PNG. Uložený PNG používá stejnou horizontální orientaci jako náhled.
 
 CSV je zapisováno v rostoucím pořadí opraveného `sensor_pixel`. Pro dohledatelnost obsahuje také `raw_sensor_pixel`, tedy původní X souřadnici kamery před zrcadlením.
 
@@ -43,6 +45,7 @@ Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkr�
 - kolečkem se zoomuje kolem kurzoru;
 - `Shift` + tažení nebo prostřední tlačítko posouvá zobrazený rozsah;
 - dvojklik nebo tlačítko **Reset zoomu** obnoví celý rozsah;
+- osa Y se automaticky přizpůsobuje aktuálně viditelné části spektra a zapnutým kanálům;
 - crosshair zobrazuje přesnou vlnovou délku, opravený absolutní pixel senzoru a intenzity aktivních kanálů;
 - při kalibrované ose X se zobrazuje spektrální barevné pozadí a výraznější barevný pás odpovídající aktuálně zobrazeným vlnovým délkám.
 
@@ -54,6 +57,7 @@ Graf automaticky hledá lokální píky v jasovém spektru. Před detekcí se po
 - citlivost má režimy **Nízká**, **Střední** a **Vysoká**;
 - při zoomu se zobrazují jen píky v aktuálním rozsahu;
 - počet popisků je omezen podle šířky grafu a přednost mají píky s vyšší prominencí;
+- popisky u okrajů grafu se umisťují dovnitř kreslicí plochy;
 - kliknutí na označený pík zobrazí jeho přesnou polohu a intenzitu;
 - tlačítka **Kal. bod 1** a **Kal. bod 2** aktivují výběr kalibračního bodu; následující kliknutí na pík vloží jeho opravený absolutní pixel senzoru do příslušného kalibračního pole.
 
