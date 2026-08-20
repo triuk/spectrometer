@@ -154,21 +154,82 @@ async function waitForMetadata() {
   await new Promise((resolve) => elements.video.addEventListener("loadedmetadata", resolve, { once: true }));
 }
 
+function stopStream(stream) {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+async function openCameraDevice(deviceId) {
+  return navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { deviceId: { exact: deviceId } },
+  });
+}
+
+async function videoInputs() {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter((device) => device.kind === "videoinput");
+}
+
+async function findProfileVideoInput() {
+  const expected = desiredCamera().labelContains.trim();
+  if (!expected) return null;
+  const devices = await videoInputs();
+  return devices.find((device) => device.deviceId && labelMatchesProfile(device.label)) ?? null;
+}
+
 async function requestCameraStream() {
+  const expected = desiredCamera().labelContains.trim();
   const deviceId = savedDeviceId();
+
+  // deviceId je pouze lokální browserový identifikátor. U UVC kamer bez
+  // sériového čísla se po přesunutí za USB hub může změnit, proto ověřujeme
+  // i label a při neúspěchu zařízení znovu hledáme podle profilu.
   if (deviceId) {
     try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { deviceId: { exact: deviceId } },
-      });
+      const stream = await openCameraDevice(deviceId);
+      const track = stream.getVideoTracks()[0];
+      if (!expected || labelMatchesProfile(track?.label ?? "")) return stream;
+      console.warn(`Saved camera no longer matches profile: ${track?.label ?? "unknown"}.`);
+      stopStream(stream);
+      forgetSavedDevice();
     } catch (error) {
-      console.warn("Saved camera is unavailable; falling back to the browser chooser.", error);
+      console.warn("Saved camera is unavailable; rediscovering the profile camera.", error);
       forgetSavedDevice();
     }
   }
 
-  return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  // Pokud už má origin oprávnění, enumerateDevices() obvykle vrátí i názvy
+  // zařízení a můžeme spektrometr otevřít rovnou podle labelContains.
+  let matchingDevice = await findProfileVideoInput();
+  if (matchingDevice) return openCameraDevice(matchingDevice.deviceId);
+
+  // Před prvním povolením kamery jsou labely z privacy důvodů prázdné.
+  // Otevřeme tedy dočasně výchozí kameru, čímž uživatel udělí oprávnění,
+  // a následně zařízení znovu enumerujeme. Pokud je výchozí kamera rovnou
+  // spektrometr, není potřeba stream otevírat podruhé.
+  const probeStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  const probeTrack = probeStream.getVideoTracks()[0];
+  if (!expected || labelMatchesProfile(probeTrack?.label ?? "")) return probeStream;
+
+  try {
+    matchingDevice = await findProfileVideoInput();
+    if (matchingDevice) {
+      stopStream(probeStream);
+      return await openCameraDevice(matchingDevice.deviceId);
+    }
+
+    const devices = await videoInputs();
+    const available = devices
+      .map((device) => device.label || "nepojmenovaná kamera")
+      .join(", ");
+    throw new Error(
+      `Kamera profilu „${expected}“ nebyla nalezena${available ? `. Dostupné kamery: ${available}` : "."}`,
+    );
+  } catch (error) {
+    stopStream(probeStream);
+    throw error;
+  }
 }
 
 async function selectBestCaptureProfile(track) {
