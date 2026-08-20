@@ -1,0 +1,254 @@
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.app-grid { padding-top: 1rem; }
+
+.camera-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.capture-mode {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: rgb(10 15 24 / 0.78);
+  cursor: help;
+}
+.capture-mode:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.capture-mode-optimal {
+  border-color: #3fcf8e;
+  background: rgba(63, 207, 142, 0.11);
+}
+.capture-mode-fallback {
+  border-color: #f5a742;
+  background: rgba(245, 167, 66, 0.12);
+}
+.capture-mode-error {
+  border-color: var(--danger);
+  background: rgb(255 114 114 / 0.1);
+}
+.capture-mode-badge {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.capture-mode-optimal .capture-mode-badge { color: #60e5aa; }
+.capture-mode-fallback .capture-mode-badge { color: #ffb85c; }
+.capture-mode-error .capture-mode-badge { color: var(--danger); }
+
+.capture-mode-tooltip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  width: min(23rem, calc(100vw - 2rem));
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #080d15;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+.capture-mode:hover .capture-mode-tooltip,
+.capture-mode:focus .capture-mode-tooltip,
+.capture-mode:focus-within .capture-mode-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+.capture-mode-grid {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+.capture-mode-grid > div {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.6rem;
+}
+.capture-mode-grid dt { color: var(--muted); }
+.capture-mode-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.image-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.65rem;
+}
+.heading-with-help {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.heading-with-help h2 { margin: 0; }
+.help-popover { position: relative; }
+.help-button {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+.help-button:hover,
+.help-button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.help-tooltip {
+  position: absolute;
+  z-index: 35;
+  top: calc(100% + 0.45rem);
+  left: -0.4rem;
+  width: min(20rem, calc(100vw - 2rem));
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-0.2rem);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0.65rem;
+  background: #080d15;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.4;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+.help-popover:hover .help-tooltip,
+.help-popover:focus-within .help-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mode-toggle {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0b1320;
+}
+.mode-button {
+  min-height: 2rem;
+  border: 0;
+  border-right: 1px solid var(--border);
+  padding: 0.35rem 0.6rem;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.mode-button:last-child { border-right: 0; }
+.mode-button.active {
+  background: var(--accent-strong);
+  color: var(--text);
+}
+.mode-button:hover:not(:disabled) { color: var(--text); }
+
+.image-settings-details {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgb(8 13 21 / 0.38);
+}
+.image-settings-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+  color: #c9d6e6;
+  font-size: 0.82rem;
+  font-weight: 650;
+  list-style: none;
+}
+.image-settings-details summary::-webkit-details-marker { display: none; }
+.image-settings-details summary::before {
+  content: "›";
+  margin-right: 0.25rem;
+  color: var(--muted);
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+.image-settings-details[open] summary::before { transform: rotate(90deg); }
+.image-settings-details[open] summary { border-bottom: 1px solid var(--border); }
+.details-state {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.camera-controls {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+.camera-control {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.75fr) minmax(0, 1.25fr) 5.5rem;
+  align-items: center;
+  gap: 0.55rem;
+}
+.camera-control[hidden] { display: none; }
+.camera-control label { margin: 0; }
+.camera-control input[type="range"] { min-height: auto; padding: 0; }
+.camera-control select { grid-column: 2 / 4; }
+.camera-control-auto { opacity: 0.55; }
+.camera-control-auto label::after {
+  content: " (auto)";
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.control-status {
+  min-height: 1.1rem;
+  margin: 0.45rem 0 0;
+}
+.control-error { color: #ff7272; }
+
+@media (max-width: 620px) {
+  .capture-mode-grid > div { grid-template-columns: 1fr; gap: 0.15rem; }
+  .image-settings-heading { align-items: flex-start; }
+  .mode-button { padding-inline: 0.45rem; }
+  .camera-control { grid-template-columns: 1fr 5.5rem; }
+  .camera-control label { grid-column: 1 / 3; }
+  .camera-control select { grid-column: 1 / 3; }
+}

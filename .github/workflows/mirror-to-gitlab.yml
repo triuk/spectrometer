@@ -1,0 +1,71 @@
+name: Mirror to GitLab
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "**"
+  delete:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-to-gitlab
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror branches and tags
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure GitLab SSH access
+        env:
+          GITLAB_MIRROR_SSH_KEY: ${{ secrets.GITLAB_MIRROR_SSH_KEY }}
+        run: |
+          set -euo pipefail
+
+          test -n "${GITLAB_MIRROR_SSH_KEY}"
+
+          install -m 700 -d "${HOME}/.ssh"
+          printf '%s\n' "${GITLAB_MIRROR_SSH_KEY}" > "${HOME}/.ssh/gitlab_mirror"
+          chmod 600 "${HOME}/.ssh/gitlab_mirror"
+
+          cat > "${HOME}/.ssh/config" <<'EOF'
+          Host gitlab.com
+            HostName gitlab.com
+            User git
+            IdentityFile ~/.ssh/gitlab_mirror
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 "${HOME}/.ssh/config"
+
+          cat > "${HOME}/.ssh/known_hosts" <<'EOF'
+          gitlab.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAfuCHKVTjquxvt6CM6tdG4SLp1Btn/nOeHHE5UOzRdf
+          EOF
+          chmod 600 "${HOME}/.ssh/known_hosts"
+
+      - name: Clone GitHub repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git clone --mirror \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            repository.git
+
+      - name: Push branches and tags to GitLab
+        run: |
+          set -euo pipefail
+
+          git -C repository.git remote add gitlab \
+            "git@gitlab.com:lab-devices/spectrometer.git"
+
+          git -C repository.git push --prune gitlab \
+            '+refs/heads/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'

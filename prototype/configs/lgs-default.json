@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "lgs-default",
+  "name": "Little Garden Spectrometer – výchozí",
+  "camera": {
+    "labelContains": "USB-ZH",
+    "width": 1920,
+    "height": 1080,
+    "frameRate": 5
+  },
+  "sensorOrientation": {
+    "flipX": true
+  },
+  "roi": {
+    "x": 0,
+    "y": 497,
+    "width": 1920,
+    "height": 86,
+    "coordinateSystem": "spectral"
+  },
+  "calibration": {
+    "model": "linear",
+    "points": [
+      {
+        "pixel": 0,
+        "wavelengthNm": 400,
+        "label": "Kalibrační bod 1"
+      },
+      {
+        "pixel": 1919,
+        "wavelengthNm": 700,
+        "label": "Kalibrační bod 2"
+      }
+    ]
+  },
+  "cameraSettings": {
+    "whiteBalance": 4600,
+    "exposureMax": 1800,
+    "brightness": 0,
+    "contrast": 32,
+    "saturation": 50,
+    "sharpness": 1
+  },
+  "exposureOptimization": {
+    "model": "piecewise-monotonic",
+    "discontinuityPeriod": 32,
+    "discontinuityOrigin": 0,
+    "freshFrames": 5,
+    "sampleFrames": 3
+  }
+}
