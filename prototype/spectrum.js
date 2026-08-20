@@ -26,8 +26,10 @@ export function initialiseDefaultRoi() {
   state.averagedSpectrum = null;
   if (state.darkSpectrum) clearDarkSpectrum();
   if (!state.instrumentProfile) {
-    elements.pixel1.value = String(state.roi.x);
-    elements.pixel2.value = String(state.roi.x + width - 1);
+    const first = spectralSensorPixel(0);
+    const last = spectralSensorPixel(width - 1);
+    elements.pixel1.value = String(Math.min(first, last));
+    elements.pixel2.value = String(Math.max(first, last));
   }
   updateRoiOutput();
   drawOverlay();
@@ -248,6 +250,27 @@ export function clearDarkSpectrum() {
   drawPlot();
 }
 
+function sensorWidth() {
+  return elements.video.videoWidth
+    || Number(state.instrumentProfile?.camera?.width)
+    || elements.captureCanvas.width
+    || 0;
+}
+
+function sensorXFlipped() {
+  return state.instrumentProfile?.sensorOrientation?.flipX !== false;
+}
+
+export function rawSensorPixel(roiPixel) {
+  return (state.roi?.x ?? 0) + roiPixel;
+}
+
+export function spectralSensorPixel(roiPixel) {
+  const raw = rawSensorPixel(roiPixel);
+  const width = sensorWidth();
+  return sensorXFlipped() && width > 0 ? width - 1 - raw : raw;
+}
+
 function calibration() {
   const p1 = toFiniteNumber(elements.pixel1.value, 0);
   const p2 = toFiniteNumber(elements.pixel2.value, 1);
@@ -256,7 +279,7 @@ function calibration() {
   if (p1 === p2) return null;
   const slope = (w2 - w1) / (p2 - p1);
   return {
-    coordinateSystem: "sensor",
+    coordinateSystem: sensorXFlipped() ? "sensor-x-flipped" : "sensor",
     pixel1: p1,
     pixel2: p2,
     wavelength1: w1,
@@ -266,18 +289,16 @@ function calibration() {
   };
 }
 
-function sensorPixel(roiPixel) {
-  return (state.roi?.x ?? 0) + roiPixel;
-}
-
 function wavelength(roiPixel) {
   const current = calibration();
-  return current ? current.slope * sensorPixel(roiPixel) + current.intercept : null;
+  return current ? current.slope * spectralSensorPixel(roiPixel) + current.intercept : null;
 }
 
-function calibrationIsReversed() {
-  const current = calibration();
-  return Boolean(current && current.slope < 0);
+function displayIsReversed(count) {
+  if (count < 2) return false;
+  const first = wavelength(0) ?? spectralSensorPixel(0);
+  const last = wavelength(count - 1) ?? spectralSensorPixel(count - 1);
+  return first > last;
 }
 
 function resizePlot() {
@@ -334,7 +355,7 @@ function drawGrid(margin, plotWidth, plotHeight, maximum, count, ratio) {
   plotContext.fillStyle = "#97a9bd";
   plotContext.lineWidth = ratio;
   plotContext.font = `${11 * ratio}px system-ui`;
-  const reversed = calibrationIsReversed();
+  const reversed = displayIsReversed(count);
   for (let i = 0; i <= 5; i += 1) {
     const y = margin.top + plotHeight * (i / 5);
     plotContext.beginPath();
@@ -350,7 +371,7 @@ function drawGrid(margin, plotWidth, plotHeight, maximum, count, ratio) {
     const nm = wavelength(pixel);
     plotContext.textAlign = "center";
     plotContext.textBaseline = "top";
-    plotContext.fillText(nm === null ? String(sensorPixel(pixel)) : `${nm.toFixed(0)} nm`, margin.left + plotWidth * fraction, margin.top + plotHeight + 8 * ratio);
+    plotContext.fillText(nm === null ? String(spectralSensorPixel(pixel)) : `${nm.toFixed(0)} nm`, margin.left + plotWidth * fraction, margin.top + plotHeight + 8 * ratio);
   }
   plotContext.restore();
 }
@@ -361,7 +382,7 @@ function drawChannel(values, color, margin, plotWidth, plotHeight, maximum) {
   plotContext.strokeStyle = color;
   plotContext.lineWidth = Math.max(1.2, window.devicePixelRatio || 1);
   plotContext.beginPath();
-  const reversed = calibrationIsReversed();
+  const reversed = displayIsReversed(values.length);
   for (let i = 0; i < values.length; i += 1) {
     const fraction = (reversed ? values.length - 1 - i : i) / (values.length - 1);
     const x = margin.left + fraction * plotWidth;
@@ -376,14 +397,16 @@ function updatePeak(values) {
   let peak = 0;
   for (let i = 1; i < values.length; i += 1) if (values[i] > values[peak]) peak = i;
   const nm = wavelength(peak);
-  const absolutePixel = sensorPixel(peak);
+  const absolutePixel = spectralSensorPixel(peak);
   elements.peakOutput.textContent = `Maximum: ${nm === null ? `pixel ${absolutePixel}` : `${nm.toFixed(1)} nm`}, ${values[peak].toFixed(1)}`;
 }
 
 export function useRoiWidthForCalibration() {
   if (!state.roi) return;
-  elements.pixel1.value = String(state.roi.x);
-  elements.pixel2.value = String(state.roi.x + state.roi.width - 1);
+  const first = spectralSensorPixel(0);
+  const last = spectralSensorPixel(state.roi.width - 1);
+  elements.pixel1.value = String(Math.min(first, last));
+  elements.pixel2.value = String(Math.max(first, last));
   drawPlot();
 }
 
@@ -396,15 +419,24 @@ export function exportCsv() {
     cameraLabel: state.track?.label ?? "",
     cameraSettings: state.track?.getSettings() ?? {},
     roi: state.roi,
+    sensorOrientation: { flipX: sensorXFlipped() },
     averagedFrames: state.spectrumHistory.length,
     darkSubtraction: Boolean(elements.subtractDark.checked && state.darkSpectrum),
     calibration: calibration(),
-    display: { reverseSpectrum: Boolean(state.reverseSpectrum) },
   };
-  const lines = [`# metadata=${JSON.stringify(metadata)}`, "roi_pixel,sensor_pixel,wavelength_nm,red,green,blue,luminance"];
-  for (let i = 0; i < spectrum.luminance.length; i += 1) {
-    const nm = wavelength(i);
-    lines.push([i, sensorPixel(i), nm === null ? "" : nm.toFixed(6), ...CHANNELS.map((name) => spectrum[name][i].toFixed(6))].join(","));
+  const lines = [`# metadata=${JSON.stringify(metadata)}`, "roi_pixel,sensor_pixel,raw_sensor_pixel,wavelength_nm,red,green,blue,luminance"];
+  const count = spectrum.luminance.length;
+  const sensorOrderReversed = count > 1 && spectralSensorPixel(0) > spectralSensorPixel(count - 1);
+  for (let outputIndex = 0; outputIndex < count; outputIndex += 1) {
+    const sourceIndex = sensorOrderReversed ? count - 1 - outputIndex : outputIndex;
+    const nm = wavelength(sourceIndex);
+    lines.push([
+      outputIndex,
+      spectralSensorPixel(sourceIndex),
+      rawSensorPixel(sourceIndex),
+      nm === null ? "" : nm.toFixed(6),
+      ...CHANNELS.map((name) => spectrum[name][sourceIndex].toFixed(6)),
+    ].join(","));
   }
   download(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }), `spectrum-${timestamp()}.csv`);
 }
