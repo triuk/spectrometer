@@ -11,9 +11,32 @@ import {
 
 const CHANNELS = ["red", "green", "blue", "luminance"];
 
+function sensorWidth() {
+  return elements.video.videoWidth
+    || Number(state.instrumentProfile?.camera?.width)
+    || elements.captureCanvas.width
+    || 0;
+}
+
+function sensorHeight() {
+  return elements.video.videoHeight
+    || Number(state.instrumentProfile?.camera?.height)
+    || elements.captureCanvas.height
+    || 0;
+}
+
+function sensorXFlipped() {
+  return state.instrumentProfile?.sensorOrientation?.flipX !== false;
+}
+
+function updatePreviewOrientation() {
+  elements.video.classList.toggle("spectrum-flip-x", sensorXFlipped());
+}
+
 export function initialiseCaptureSurface() {
   elements.captureCanvas.width = elements.video.videoWidth;
   elements.captureCanvas.height = elements.video.videoHeight;
+  updatePreviewOrientation();
 }
 
 export function initialiseDefaultRoi() {
@@ -26,10 +49,8 @@ export function initialiseDefaultRoi() {
   state.averagedSpectrum = null;
   if (state.darkSpectrum) clearDarkSpectrum();
   if (!state.instrumentProfile) {
-    const first = spectralSensorPixel(0);
-    const last = spectralSensorPixel(width - 1);
-    elements.pixel1.value = String(Math.min(first, last));
-    elements.pixel2.value = String(Math.max(first, last));
+    elements.pixel1.value = "0";
+    elements.pixel2.value = String(width - 1);
   }
   updateRoiOutput();
   drawOverlay();
@@ -42,6 +63,7 @@ export function observePreviewSize() {
 }
 
 export function resizeOverlay() {
+  updatePreviewOrientation();
   const rect = elements.videoStage.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
   elements.overlayCanvas.width = Math.max(1, Math.round(rect.width * ratio));
@@ -67,6 +89,7 @@ export function clearOverlay() {
 
 function drawOverlay() {
   clearOverlay();
+  updatePreviewOrientation();
   if (!state.roi || !elements.video.videoWidth) return;
   const shown = displayedVideoRect();
   const scaleX = shown.width / elements.video.videoWidth;
@@ -92,6 +115,8 @@ function pointerToVideo(event) {
   const canvasX = (event.clientX - rect.left) * ratio;
   const canvasY = (event.clientY - rect.top) * ratio;
   return {
+    // Náhled je orientovaný stejně jako spektrum, proto je X přímo kanonický
+    // spektrální pixel. Převod na raw X kamery se děje až při čtení obrazu.
     x: clamp(Math.round(((canvasX - shown.x) / shown.width) * elements.video.videoWidth), 0, elements.video.videoWidth - 1),
     y: clamp(Math.round(((canvasY - shown.y) / shown.height) * elements.video.videoHeight), 0, elements.video.videoHeight - 1),
   };
@@ -140,6 +165,25 @@ function normaliseRoi(roi) {
   };
 }
 
+export function rawRoiFromSpectral(source = state.roi) {
+  const width = sensorWidth();
+  const height = sensorHeight();
+  if (!source || !width || !height) return null;
+
+  const spectralX = clamp(Math.round(Number(source.x)), 0, width - 1);
+  const y = clamp(Math.round(Number(source.y)), 0, height - 1);
+  const roiWidth = clamp(Math.round(Number(source.width)), 1, width - spectralX);
+  const roiHeight = clamp(Math.round(Number(source.height)), 1, height - y);
+  const rawX = sensorXFlipped() ? width - spectralX - roiWidth : spectralX;
+
+  return {
+    x: clamp(rawX, 0, width - roiWidth),
+    y,
+    width: roiWidth,
+    height: roiHeight,
+  };
+}
+
 function updateRoiOutput() {
   if (!state.roi) return;
   const { x, y, width, height } = state.roi;
@@ -181,22 +225,28 @@ function processFrame() {
 }
 
 function extractSpectrum(roi) {
-  const image = captureContext.getImageData(roi.x, roi.y, roi.width, roi.height);
-  const result = Object.fromEntries(CHANNELS.map((name) => [name, new Float32Array(roi.width)]));
-  for (let y = 0; y < roi.height; y += 1) {
-    for (let x = 0; x < roi.width; x += 1) {
-      const offset = (y * roi.width + x) * 4;
+  const rawRoi = rawRoiFromSpectral(roi);
+  if (!rawRoi) return Object.fromEntries(CHANNELS.map((name) => [name, new Float32Array(0)]));
+
+  const image = captureContext.getImageData(rawRoi.x, rawRoi.y, rawRoi.width, rawRoi.height);
+  const result = Object.fromEntries(CHANNELS.map((name) => [name, new Float32Array(rawRoi.width)]));
+  const flip = sensorXFlipped();
+
+  for (let y = 0; y < rawRoi.height; y += 1) {
+    for (let rawX = 0; rawX < rawRoi.width; rawX += 1) {
+      const offset = (y * rawRoi.width + rawX) * 4;
+      const outputX = flip ? rawRoi.width - 1 - rawX : rawX;
       const r = image.data[offset];
       const g = image.data[offset + 1];
       const b = image.data[offset + 2];
-      result.red[x] += r;
-      result.green[x] += g;
-      result.blue[x] += b;
-      result.luminance[x] += 0.299 * r + 0.587 * g + 0.114 * b;
+      result.red[outputX] += r;
+      result.green[outputX] += g;
+      result.blue[outputX] += b;
+      result.luminance[outputX] += 0.299 * r + 0.587 * g + 0.114 * b;
     }
   }
   for (const values of Object.values(result)) {
-    for (let x = 0; x < values.length; x += 1) values[x] /= roi.height;
+    for (let x = 0; x < values.length; x += 1) values[x] /= rawRoi.height;
   }
   return result;
 }
@@ -250,25 +300,14 @@ export function clearDarkSpectrum() {
   drawPlot();
 }
 
-function sensorWidth() {
-  return elements.video.videoWidth
-    || Number(state.instrumentProfile?.camera?.width)
-    || elements.captureCanvas.width
-    || 0;
-}
-
-function sensorXFlipped() {
-  return state.instrumentProfile?.sensorOrientation?.flipX !== false;
-}
-
-export function rawSensorPixel(roiPixel) {
+export function spectralSensorPixel(roiPixel) {
   return (state.roi?.x ?? 0) + roiPixel;
 }
 
-export function spectralSensorPixel(roiPixel) {
-  const raw = rawSensorPixel(roiPixel);
+export function rawSensorPixel(roiPixel) {
+  const spectral = spectralSensorPixel(roiPixel);
   const width = sensorWidth();
-  return sensorXFlipped() && width > 0 ? width - 1 - raw : raw;
+  return sensorXFlipped() && width > 0 ? width - 1 - spectral : spectral;
 }
 
 function calibration() {
@@ -279,7 +318,7 @@ function calibration() {
   if (p1 === p2) return null;
   const slope = (w2 - w1) / (p2 - p1);
   return {
-    coordinateSystem: sensorXFlipped() ? "sensor-x-flipped" : "sensor",
+    coordinateSystem: "spectral-sensor",
     pixel1: p1,
     pixel2: p2,
     wavelength1: w1,
@@ -403,10 +442,8 @@ function updatePeak(values) {
 
 export function useRoiWidthForCalibration() {
   if (!state.roi) return;
-  const first = spectralSensorPixel(0);
-  const last = spectralSensorPixel(state.roi.width - 1);
-  elements.pixel1.value = String(Math.min(first, last));
-  elements.pixel2.value = String(Math.max(first, last));
+  elements.pixel1.value = String(state.roi.x);
+  elements.pixel2.value = String(state.roi.x + state.roi.width - 1);
   drawPlot();
 }
 
@@ -418,24 +455,21 @@ export function exportCsv() {
     instrumentProfile: state.instrumentProfile ? { id: state.instrumentProfile.id, name: state.instrumentProfile.name } : null,
     cameraLabel: state.track?.label ?? "",
     cameraSettings: state.track?.getSettings() ?? {},
-    roi: state.roi,
+    roi: { ...state.roi, coordinateSystem: "spectral" },
     sensorOrientation: { flipX: sensorXFlipped() },
     averagedFrames: state.spectrumHistory.length,
     darkSubtraction: Boolean(elements.subtractDark.checked && state.darkSpectrum),
     calibration: calibration(),
   };
   const lines = [`# metadata=${JSON.stringify(metadata)}`, "roi_pixel,sensor_pixel,raw_sensor_pixel,wavelength_nm,red,green,blue,luminance"];
-  const count = spectrum.luminance.length;
-  const sensorOrderReversed = count > 1 && spectralSensorPixel(0) > spectralSensorPixel(count - 1);
-  for (let outputIndex = 0; outputIndex < count; outputIndex += 1) {
-    const sourceIndex = sensorOrderReversed ? count - 1 - outputIndex : outputIndex;
-    const nm = wavelength(sourceIndex);
+  for (let i = 0; i < spectrum.luminance.length; i += 1) {
+    const nm = wavelength(i);
     lines.push([
-      outputIndex,
-      spectralSensorPixel(sourceIndex),
-      rawSensorPixel(sourceIndex),
+      i,
+      spectralSensorPixel(i),
+      rawSensorPixel(i),
       nm === null ? "" : nm.toFixed(6),
-      ...CHANNELS.map((name) => spectrum[name][sourceIndex].toFixed(6)),
+      ...CHANNELS.map((name) => spectrum[name][i].toFixed(6)),
     ].join(","));
   }
   download(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }), `spectrum-${timestamp()}.csv`);
@@ -443,8 +477,24 @@ export function exportCsv() {
 
 export function saveFrame() {
   if (!state.track) return;
-  captureContext.drawImage(elements.video, 0, 0, elements.captureCanvas.width, elements.captureCanvas.height);
-  elements.captureCanvas.toBlob((blob) => { if (blob) download(blob, `spectrometer-frame-${timestamp()}.png`); }, "image/png");
+  const width = elements.video.videoWidth;
+  const height = elements.video.videoHeight;
+  if (!width || !height) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  context.save();
+  if (sensorXFlipped()) {
+    context.translate(width, 0);
+    context.scale(-1, 1);
+  }
+  context.drawImage(elements.video, 0, 0, width, height);
+  context.restore();
+  canvas.toBlob((blob) => { if (blob) download(blob, `spectrometer-frame-${timestamp()}.png`); }, "image/png");
 }
 
 function download(blob, filename) {
