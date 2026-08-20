@@ -145,6 +145,17 @@
     </section>
 
     <section class="workspace">
+      <section class="panel plot-panel" aria-labelledby="plot-heading">
+        <div class="panel-heading-row">
+          <div>
+            <h2 id="plot-heading">Spektrum</h2>
+            <p class="hint">Osa X: pixel nebo kalibrovaná vlnová délka. Osa Y: relativní intenzita.</p>
+          </div>
+          <output id="peakOutput" class="data-badge">Maximum: –</output>
+        </div>
+        <canvas id="plotCanvas" aria-label="Graf spektra"></canvas>
+      </section>
+
       <section class="panel preview-panel" aria-labelledby="preview-heading">
         <div class="panel-heading-row">
           <div>
@@ -158,17 +169,6 @@
           <canvas id="overlayCanvas" aria-label="Výběr oblasti spektra"></canvas>
           <div id="videoPlaceholder" class="video-placeholder">Spusť kameru pro zobrazení obrazu.</div>
         </div>
-      </section>
-
-      <section class="panel plot-panel" aria-labelledby="plot-heading">
-        <div class="panel-heading-row">
-          <div>
-            <h2 id="plot-heading">Spektrum</h2>
-            <p class="hint">Osa X: pixel nebo kalibrovaná vlnová délka. Osa Y: relativní intenzita.</p>
-          </div>
-          <output id="peakOutput" class="data-badge">Maximum: –</output>
-        </div>
-        <canvas id="plotCanvas" aria-label="Graf spektra"></canvas>
       </section>
 
       <details class="panel diagnostics-panel">
