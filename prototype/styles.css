@@ -282,6 +282,10 @@ button:focus-visible {
   object-fit: contain;
 }
 
+.video-stage video.spectrum-flip-x {
+  transform: scaleX(-1);
+}
+
 .video-stage canvas {
   touch-action: none;
 }
