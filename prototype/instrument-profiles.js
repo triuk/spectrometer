@@ -67,8 +67,8 @@ function normaliseProfile(profile) {
     normalised.sensorOrientation = { flipX: true };
   }
 
-  // Do této verze byla ROI i po migraci kalibrace stále v raw X kamery.
-  // Nově je ROI ve stejném spektrálním systému jako graf a kalibrace.
+  // Starší ROI byla ukládána v raw souřadnicích kamery. V profilu ji držíme
+  // v uživatelském spektrálním systému, zatímco runtime state.roi zůstává raw.
   if (normalised.roi && normalised.roi.coordinateSystem !== "spectral") {
     if (normalised.sensorOrientation?.flipX && Number.isFinite(width) && width > 0) {
       normalised.roi.x = width - Number(normalised.roi.x) - Number(normalised.roi.width);
@@ -226,15 +226,18 @@ function applyRoi(profile) {
   const referenceHeight = Number(profile.camera?.height) || height;
   const scaleX = width / referenceWidth;
   const scaleY = height / referenceHeight;
-  const x = clamp(Math.round(Number(source.x) * scaleX), 0, width - 1);
+  const spectralX = clamp(Math.round(Number(source.x) * scaleX), 0, width - 1);
   const y = clamp(Math.round(Number(source.y) * scaleY), 0, height - 1);
-  const roiWidth = clamp(Math.round(Number(source.width) * scaleX), 1, width - x);
+  const roiWidth = clamp(Math.round(Number(source.width) * scaleX), 1, width - spectralX);
   const roiHeight = clamp(Math.round(Number(source.height) * scaleY), 1, height - y);
+  const rawX = profile.sensorOrientation?.flipX !== false
+    ? width - spectralX - roiWidth
+    : spectralX;
 
-  state.roi = { x, y, width: roiWidth, height: roiHeight };
+  state.roi = { x: clamp(rawX, 0, width - roiWidth), y, width: roiWidth, height: roiHeight };
   state.spectrumHistory = [];
   state.averagedSpectrum = null;
-  elements.roiOutput.textContent = `ROI: x ${x}, y ${y}, ${roiWidth} × ${roiHeight}`;
+  elements.roiOutput.textContent = `ROI: x ${spectralX}, y ${y}, ${roiWidth} × ${roiHeight}`;
 }
 
 async function applyCameraSettings(profile) {
@@ -320,7 +323,14 @@ function buildCurrentProfile({ id, name }) {
   const base = state.instrumentProfile ?? {};
   const cameraSettings = state.track?.getSettings() ?? {};
   const camera = base.camera ?? {};
-  const roi = state.roi ?? base.roi ?? { x: 0, y: 0, width: camera.width ?? 1920, height: 1 };
+  const cameraWidth = Number(cameraSettings.width) || Number(camera.width) || elements.video.videoWidth || 1920;
+  const cameraHeight = Number(cameraSettings.height) || Number(camera.height) || elements.video.videoHeight || 1080;
+  const runtimeRoi = state.roi;
+  const roi = runtimeRoi ?? base.roi ?? { x: 0, y: 0, width: cameraWidth, height: 1 };
+  const flipX = base.sensorOrientation?.flipX !== false;
+  const spectralRoiX = runtimeRoi && flipX
+    ? cameraWidth - Number(runtimeRoi.x) - Number(runtimeRoi.width)
+    : Number(roi.x);
 
   return validateProfile({
     schemaVersion: SCHEMA_VERSION,
@@ -328,15 +338,15 @@ function buildCurrentProfile({ id, name }) {
     name,
     camera: {
       labelContains: base.camera?.labelContains ?? state.track?.label ?? "",
-      width: Number(cameraSettings.width) || Number(camera.width) || elements.video.videoWidth || 1920,
-      height: Number(cameraSettings.height) || Number(camera.height) || elements.video.videoHeight || 1080,
+      width: cameraWidth,
+      height: cameraHeight,
       frameRate: Number(cameraSettings.frameRate) || Number(camera.frameRate) || 5,
     },
     sensorOrientation: {
-      flipX: base.sensorOrientation?.flipX !== false,
+      flipX,
     },
     roi: {
-      x: Number(roi.x),
+      x: spectralRoiX,
       y: Number(roi.y),
       width: Number(roi.width),
       height: Number(roi.height),
