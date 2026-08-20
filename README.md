@@ -24,7 +24,7 @@ python -m http.server 8000 -d prototype
 
 Potom otevřete `http://localhost:8000` v Chromiu. Přístup ke kameře vyžaduje HTTPS nebo `localhost`.
 
-Vestavěné profily jsou v `prototype/configs/`. U výchozího LGS profilu je potvrzeno obrácené snímání spektra na ose X kamery, proto se před kalibrací používá zrcadlená spektrální souřadnice senzoru `x_spectrum = width - 1 - x_raw`. Kalibrační pixely jsou absolutní souřadnice v tomto opraveném systému, takže horizontální posun ROI nemění kalibraci. Uživatelské profily lze importovat/exportovat jako JSON; vazba profilu na konkrétní USB kameru se ukládá jen lokálně v prohlížeči.
+Vestavěné profily jsou v `prototype/configs/`. U výchozího LGS profilu je potvrzeno obrácené snímání spektra na ose X kamery, proto se používá zrcadlená spektrální souřadnice senzoru `x_spectrum = width - 1 - x_raw`. Náhled kamery se zobrazuje ve stejné orientaci jako graf, takže levá strana náhledu odpovídá levé straně spektra. ROI a kalibrační pixely v profilu používají tento spektrální systém; raw souřadnice kamery zůstávají jen uvnitř akviziční vrstvy. Uživatelské profily lze importovat/exportovat jako JSON; vazba profilu na konkrétní USB kameru se ukládá jen lokálně v prohlížeči.
 
 Kamera při měření používá pevné ruční nastavení. Jas, kontrast, saturace, ostrost a vyvážení bílé se během měření nemají měnit, protože by ovlivnily tvar nebo intenzitu spektra.
 
