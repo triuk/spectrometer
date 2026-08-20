@@ -36,6 +36,9 @@ function validateProfile(profile) {
   if (!roi || ![roi.x, roi.y, roi.width, roi.height].every(finite) || Number(roi.width) <= 0 || Number(roi.height) <= 0) {
     throw new Error("Profil nemá platnou ROI.");
   }
+  if (roi.coordinateSystem && roi.coordinateSystem !== "spectral") {
+    throw new Error("Profil používá nepodporovaný souřadnicový systém ROI.");
+  }
 
   const calibration = profile.calibration;
   if (!calibration || calibration.model !== "linear" || !Array.isArray(calibration.points) || calibration.points.length < 2) {
@@ -50,10 +53,11 @@ function validateProfile(profile) {
 
 function normaliseProfile(profile) {
   const normalised = clone(profile);
+  const width = Number(normalised.camera?.width);
   const hasOrientation = typeof normalised.sensorOrientation?.flipX === "boolean";
 
+  // Starší profily ukládaly kalibrační pixel přímo v raw souřadnicích kamery.
   if (!hasOrientation) {
-    const width = Number(normalised.camera?.width);
     if (Number.isFinite(width) && width > 0 && Array.isArray(normalised.calibration?.points)) {
       normalised.calibration.points = normalised.calibration.points.map((point) => ({
         ...point,
@@ -61,6 +65,15 @@ function normaliseProfile(profile) {
       }));
     }
     normalised.sensorOrientation = { flipX: true };
+  }
+
+  // Do této verze byla ROI i po migraci kalibrace stále v raw X kamery.
+  // Nově je ROI ve stejném spektrálním systému jako graf a kalibrace.
+  if (normalised.roi && normalised.roi.coordinateSystem !== "spectral") {
+    if (normalised.sensorOrientation?.flipX && Number.isFinite(width) && width > 0) {
+      normalised.roi.x = width - Number(normalised.roi.x) - Number(normalised.roi.width);
+    }
+    normalised.roi.coordinateSystem = "spectral";
   }
 
   if (normalised.display && Object.prototype.hasOwnProperty.call(normalised.display, "reverseSpectrum")) {
@@ -327,6 +340,7 @@ function buildCurrentProfile({ id, name }) {
       y: Number(roi.y),
       width: Number(roi.width),
       height: Number(roi.height),
+      coordinateSystem: "spectral",
     },
     calibration: {
       model: "linear",
