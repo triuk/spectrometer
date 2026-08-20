@@ -27,6 +27,11 @@ function validateProfile(profile) {
   if (!profile.id || typeof profile.id !== "string") throw new Error("Profil nemá platné id.");
   if (!profile.name || typeof profile.name !== "string") throw new Error("Profil nemá název.");
 
+  const orientation = profile.sensorOrientation;
+  if (orientation && typeof orientation.flipX !== "boolean") {
+    throw new Error("Profil nemá platnou orientaci senzoru.");
+  }
+
   const roi = profile.roi;
   if (!roi || ![roi.x, roi.y, roi.width, roi.height].every(finite) || Number(roi.width) <= 0 || Number(roi.height) <= 0) {
     throw new Error("Profil nemá platnou ROI.");
@@ -43,6 +48,29 @@ function validateProfile(profile) {
   return profile;
 }
 
+function normaliseProfile(profile) {
+  const normalised = clone(profile);
+  const hasOrientation = typeof normalised.sensorOrientation?.flipX === "boolean";
+
+  if (!hasOrientation) {
+    const width = Number(normalised.camera?.width);
+    if (Number.isFinite(width) && width > 0 && Array.isArray(normalised.calibration?.points)) {
+      normalised.calibration.points = normalised.calibration.points.map((point) => ({
+        ...point,
+        pixel: width - 1 - Number(point.pixel),
+      }));
+    }
+    normalised.sensorOrientation = { flipX: true };
+  }
+
+  if (normalised.display && Object.prototype.hasOwnProperty.call(normalised.display, "reverseSpectrum")) {
+    delete normalised.display.reverseSpectrum;
+    if (!Object.keys(normalised.display).length) delete normalised.display;
+  }
+
+  return normalised;
+}
+
 function loadLocalProfiles() {
   localProfiles.clear();
   try {
@@ -50,12 +78,13 @@ function loadLocalProfiles() {
     if (!Array.isArray(stored)) return;
     for (const profile of stored) {
       try {
-        validateProfile(profile);
-        localProfiles.set(profile.id, profile);
+        const normalised = validateProfile(normaliseProfile(profile));
+        localProfiles.set(normalised.id, normalised);
       } catch (error) {
         console.warn("Ignoring invalid local instrument profile.", error, profile);
       }
     }
+    persistLocalProfiles();
   } catch (error) {
     console.warn("Local instrument profiles could not be read.", error);
   }
@@ -76,7 +105,7 @@ async function loadBuiltInProfiles() {
     const url = new URL(`./configs/${filename}`, import.meta.url);
     const profileResponse = await fetch(url, { cache: "no-store" });
     if (!profileResponse.ok) throw new Error(`Nelze načíst profil ${filename}.`);
-    const profile = validateProfile(await profileResponse.json());
+    const profile = validateProfile(normaliseProfile(await profileResponse.json()));
     builtInProfiles.set(profile.id, profile);
   }
 }
@@ -241,15 +270,11 @@ export async function applyInstrumentProfile(profile = state.instrumentProfile) 
 function activate(profile, source, applyNow = true) {
   validateProfile(profile);
   state.instrumentProfile = clone(profile);
-  state.reverseSpectrum = Boolean(profile.display?.reverseSpectrum);
   activeSource = source;
   localStorage.setItem(SELECTED_PROFILE_KEY, profile.id);
   refreshSelect();
   ui.select.value = profile.id;
   ui.status.textContent = `Aktivní profil: ${profile.name}`;
-  window.dispatchEvent(new CustomEvent("spectrometer:spectrum-orientation", {
-    detail: { reverseSpectrum: state.reverseSpectrum },
-  }));
   if (applyNow) void applyInstrumentProfile(state.instrumentProfile);
 }
 
@@ -294,6 +319,9 @@ function buildCurrentProfile({ id, name }) {
       height: Number(cameraSettings.height) || Number(camera.height) || elements.video.videoHeight || 1080,
       frameRate: Number(cameraSettings.frameRate) || Number(camera.frameRate) || 5,
     },
+    sensorOrientation: {
+      flipX: base.sensorOrientation?.flipX !== false,
+    },
     roi: {
       x: Number(roi.x),
       y: Number(roi.y),
@@ -313,10 +341,6 @@ function buildCurrentProfile({ id, name }) {
       sharpness: Number.isFinite(Number(cameraSettings.sharpness)) ? Number(cameraSettings.sharpness) : Number(base.cameraSettings?.sharpness) || 1,
     },
     exposureOptimization: base.exposureOptimization ? clone(base.exposureOptimization) : undefined,
-    display: {
-      ...(base.display ?? {}),
-      reverseSpectrum: Boolean(state.reverseSpectrum),
-    },
   });
 }
 
@@ -350,7 +374,7 @@ function saveCurrentLocally() {
 }
 
 async function importProfile(file) {
-  const profile = validateProfile(JSON.parse(await file.text()));
+  const profile = validateProfile(normaliseProfile(JSON.parse(await file.text())));
   localProfiles.set(profile.id, profile);
   persistLocalProfiles();
   activate(profile, "local", true);
