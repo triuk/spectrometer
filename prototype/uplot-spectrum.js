@@ -1,4 +1,5 @@
 import { elements, state, toFiniteNumber } from "./core.js";
+import { spectralSensorPixel } from "./spectrum.js";
 
 const UPLOT_VERSION = "1.6.32";
 const UPLOT_JS = `https://cdn.jsdelivr.net/npm/uplot@${UPLOT_VERSION}/dist/uPlot.iife.min.js`;
@@ -223,13 +224,12 @@ function seriesVisibility() {
 
 function makeChartData(spectrum) {
   const currentCalibration = calibration();
-  const roiX = state.roi?.x ?? 0;
   const length = spectrum.luminance.length;
   const x = new Array(length);
   const sensorPixels = new Array(length);
 
   for (let index = 0; index < length; index += 1) {
-    const sensorPixel = roiX + index;
+    const sensorPixel = spectralSensorPixel(index);
     sensorPixels[index] = sensorPixel;
     x[index] = currentCalibration
       ? currentCalibration.slope * sensorPixel + currentCalibration.intercept
@@ -775,6 +775,7 @@ function refreshNeeded() {
     elements.wavelength2.value,
     state.roi?.x,
     state.roi?.width,
+    state.instrumentProfile?.sensorOrientation?.flipX,
     elements.subtractDark.checked,
     elements.showLuminance.checked,
     elements.showRed.checked,
