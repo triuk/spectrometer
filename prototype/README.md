@@ -2,6 +2,8 @@
 
 Prototyp běží přímo v Chromiu a převádí obraz z USB kamery na spektrum.
 
+> Pro pokračování vývoje v novém vlákně nejdřív přečti [../AGENTS.md](../AGENTS.md) a [../HANDOFF.md](../HANDOFF.md). Handoff obsahuje aktuální pracovní kontext, hardwarové poznatky, architektonické invarianty a otevřené body k ověření.
+
 ## Profily spektrometrů
 
 Každý fyzický spektrometr má vlastní JSON profil v `configs/` nebo lokálně v prohlížeči. Profil obsahuje:
