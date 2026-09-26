@@ -2,6 +2,10 @@
 
 Webová aplikace pro kamerový **Little Garden Spectrometer**. Běží přímo v Chromiu a převádí obraz z USB kamery na spektrální křivku.
 
+## Pokračování vývoje
+
+Pro nové ChatGPT/Codex vlákno nejdřív přečti [AGENTS.md](AGENTS.md) a potom aktuální [HANDOFF.md](HANDOFF.md). Handoff obsahuje pracovní větev/PR, architektonická rozhodnutí, naměřené chování kamery a expozice, známý technický dluh a seznam věcí k ověření na reálném HW.
+
 ## Funkce
 
 - živý náhled a výběr oblasti měření (ROI);
