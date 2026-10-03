@@ -60,7 +60,7 @@ export const state = {
   spectrumHistory: [],
   averagedSpectrum: null,
   darkSpectrum: null,
-  controlApplySequence: 0,
+  plotRenderer: "canvas",
   session: 0,
   starting: false,
   measurementReady: false,

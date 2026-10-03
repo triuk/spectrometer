@@ -1,9 +1,10 @@
-import { elements, state, toFiniteNumber } from "./core.js";
-import { spectralSensorPixel, calibration, processedSpectrum } from "./spectrum.js";
+import {events} from "./events.js";
+import { elements, state } from "./core.js";
+import { spectralSensorPixel, setSpectrumRenderer } from "./spectrum.js";
 
 const UPLOT_VERSION = "1.6.32";
-const UPLOT_JS = `https://cdn.jsdelivr.net/npm/uplot@${UPLOT_VERSION}/dist/uPlot.iife.min.js`;
-const UPLOT_CSS = `https://cdn.jsdelivr.net/npm/uplot@${UPLOT_VERSION}/dist/uPlot.min.css`;
+const UPLOT_JS = new URL(`./vendor/uplot-${UPLOT_VERSION}/uPlot.iife.min.js`,import.meta.url).href;
+const UPLOT_CSS = new URL(`./vendor/uplot-${UPLOT_VERSION}/uPlot.min.css`,import.meta.url).href;
 const LOCAL_CSS = new URL("./uplot-spectrum.css", import.meta.url).href;
 const CHANNELS = ["luminance", "red", "green", "blue"];
 const SERIES = [
@@ -30,9 +31,7 @@ let calibration2Button = null;
 let peakStatus = null;
 let chart = null;
 let resizeObserver = null;
-let refreshTimer = null;
-let lastSpectrum = null;
-let lastDarkSpectrum = null;
+let interactionController = null;
 let lastSignature = "";
 let chartCalibrated = false;
 let fullDomain = null;
@@ -63,10 +62,13 @@ function loadUPlot() {
   addStylesheet(LOCAL_CSS, "uPlotSpectrumStylesheet");
 
   libraryPromise = new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("Načítání uPlot překročilo časový limit.")),5000);
+    const loaded = () => {window.clearTimeout(timer); window.uPlot ? resolve(window.uPlot) : reject(new Error("uPlot po načtení není dostupný."));};
+    const failed = () => {window.clearTimeout(timer); reject(new Error("uPlot se nepodařilo načíst."));};
     const existing = document.querySelector("#uPlotScript");
     if (existing) {
-      existing.addEventListener("load", () => resolve(window.uPlot), { once: true });
-      existing.addEventListener("error", () => reject(new Error("uPlot se nepodařilo načíst.")), { once: true });
+      existing.addEventListener("load",loaded,{once:true});
+      existing.addEventListener("error",failed,{once:true});
       return;
     }
 
@@ -75,11 +77,8 @@ function loadUPlot() {
     script.src = UPLOT_JS;
     script.async = true;
     script.crossOrigin = "anonymous";
-    script.addEventListener("load", () => {
-      if (window.uPlot) resolve(window.uPlot);
-      else reject(new Error("uPlot po načtení není dostupný."));
-    }, { once: true });
-    script.addEventListener("error", () => reject(new Error("uPlot se nepodařilo načíst z CDN.")), { once: true });
+    script.addEventListener("load",loaded,{once:true});
+    script.addEventListener("error",failed,{once:true});
     document.head.append(script);
   });
 
@@ -182,6 +181,10 @@ function fallbackToCanvas(error) {
   console.error(error);
   if (host) host.style.display = "none";
   if (fallbackCanvas) fallbackCanvas.style.display = "block";
+  clearChart();
+  for (const control of [resetButton,peakToggle,peakSensitivity,calibration1Button,calibration2Button]) if (control) control.disabled = true;
+  if (peakStatus) peakStatus.textContent = "Použit základní Canvas graf.";
+  setSpectrumRenderer(null);
 }
 
 function seriesVisibility() {
@@ -195,8 +198,7 @@ function seriesVisibility() {
   return visibility;
 }
 
-function makeChartData(spectrum) {
-  const currentCalibration = calibration();
+function makeChartData(spectrum,currentCalibration) {
   const length = spectrum.luminance.length;
   const x = new Array(length);
   const sensorPixels = new Array(length);
@@ -590,6 +592,9 @@ function resetZoom() {
 }
 
 function installInteractions(u) {
+  interactionController?.abort();
+  interactionController = new AbortController();
+  const signal = interactionController.signal;
   const over = u.over;
 
   over.addEventListener("wheel", event => {
@@ -621,7 +626,7 @@ function installInteractions(u) {
     }
     [nextMin, nextMax] = clampDomain(nextMin, nextMax);
     u.setScale("x", { min: nextMin, max: nextMax });
-  }, { passive: false });
+  }, {passive:false,signal});
 
   over.addEventListener("mousedown", event => {
     if (!(event.shiftKey && event.button === 0) && event.button !== 1) return;
@@ -634,7 +639,7 @@ function installInteractions(u) {
       max: Number(u.scales.x.max),
       width: Math.max(1, over.clientWidth),
     };
-  }, true);
+  }, {capture:true,signal});
 
   window.addEventListener("mousemove", event => {
     if (!panning || !chart || chart !== u) return;
@@ -643,16 +648,16 @@ function installInteractions(u) {
     const delta = -(event.clientX - panning.startX) / panning.width * span;
     const [min, max] = clampDomain(panning.min + delta, panning.max + delta);
     u.setScale("x", { min, max });
-  });
+  }, {signal});
 
   window.addEventListener("mouseup", () => {
     if (chart === u) panning = null;
-  });
+  }, {signal});
 
   over.addEventListener("dblclick", event => {
     event.preventDefault();
     resetZoom();
-  });
+  }, {signal});
 }
 
 function createChart(uPlotClass, data, calibrated) {
@@ -736,18 +741,20 @@ function updateSeriesVisibility() {
   autoScaleY(chart);
 }
 
-function renderCurrentSpectrum(uPlotClass) {
+function renderCurrentSpectrum(uPlotClass,spectrum,currentCalibration) {
   ensureHost();
-  const spectrum = processedSpectrum();
   if (!spectrum || !state.roi) {
-    currentPeaks = [];
-    if (emptyState) emptyState.hidden = false;
+    clearChart();
+    if (emptyState) {emptyState.textContent = "Spektrum se zobrazí po spuštění kamery."; emptyState.hidden = false;}
     if (peakLayer) peakLayer.replaceChildren();
     return;
   }
 
-  const prepared = makeChartData(spectrum);
-  if (!prepared.domain || prepared.data[0].length < 2) return;
+  const prepared = makeChartData(spectrum,currentCalibration);
+  if (!prepared.domain || prepared.data[0].length < 2) {
+    clearChart(); emptyState.textContent = "Rozšiřte ROI alespoň na dva pixely pro zobrazení křivky."; emptyState.hidden = false; return;
+  }
+  emptyState.textContent = "Spektrum se zobrazí po spuštění kamery.";
   fullDomain = prepared.domain;
   currentSensorPixels = prepared.sensorPixels;
 
@@ -759,12 +766,9 @@ function renderCurrentSpectrum(uPlotClass) {
   ].join(":");
 
   if (!chart || chartCalibrated !== prepared.calibrated) {
-    chart?.destroy();
-    chart = null;
-    tooltip = null;
-    background = null;
-    colorStrip = null;
-    peakLayer = null;
+    clearChart();
+    fullDomain = prepared.domain;
+    currentSensorPixels = prepared.sensorPixels;
     createChart(uPlotClass, prepared.data, prepared.calibrated);
     lastSignature = signature;
     return;
@@ -781,50 +785,20 @@ function renderCurrentSpectrum(uPlotClass) {
   if (emptyState) emptyState.hidden = true;
 }
 
-function refreshNeeded() {
-  const calibrationSignature = [
-    elements.pixel1.value,
-    elements.wavelength1.value,
-    elements.pixel2.value,
-    elements.wavelength2.value,
-    state.roi?.x,
-    state.roi?.width,
-    state.instrumentProfile?.sensorOrientation?.flipX,
-    state.calibrationEnabled,
-    state.calibrationCaptureMode?.width,
-    state.calibrationCaptureMode?.height,
-    elements.subtractDark.checked,
-    elements.showLuminance.checked,
-    elements.showRed.checked,
-    elements.showGreen.checked,
-    elements.showBlue.checked,
-  ].join("|");
-
-  const changed = state.averagedSpectrum !== lastSpectrum
-    || state.darkSpectrum !== lastDarkSpectrum
-    || calibrationSignature !== refreshNeeded.signature;
-  lastSpectrum = state.averagedSpectrum;
-  lastDarkSpectrum = state.darkSpectrum;
-  refreshNeeded.signature = calibrationSignature;
-  return changed;
+function clearChart() {
+  interactionController?.abort(); interactionController = null;
+  resizeObserver?.disconnect(); resizeObserver = null;
+  chart?.destroy(); chart = null;
+  currentPeaks = []; currentSensorPixels = []; fullDomain = null; panning = null;
+  tooltip = null; background = null; colorStrip = null; peakLayer = null;
+  if (resetButton) resetButton.disabled = true;
 }
-refreshNeeded.signature = "";
-
 export function installUPlotSpectrum() {
   ensureHost();
-  loadUPlot()
-    .then(uPlotClass => {
-      activateUPlot();
-      renderCurrentSpectrum(uPlotClass);
-      refreshTimer = window.setInterval(() => {
-        if (refreshNeeded()) renderCurrentSpectrum(uPlotClass);
-      }, 100);
-    })
-    .catch(fallbackToCanvas);
-
-  window.addEventListener("beforeunload", () => {
-    if (refreshTimer !== null) window.clearInterval(refreshTimer);
-    resizeObserver?.disconnect();
-    chart?.destroy();
-  });
+  loadUPlot().then(uPlotClass => {
+    activateUPlot();
+    setSpectrumRenderer((spectrum,currentCalibration) => renderCurrentSpectrum(uPlotClass,spectrum,currentCalibration));
+  }).catch(fallbackToCanvas);
+  events.addEventListener("renderer-error",event => fallbackToCanvas(event.detail));
+  window.addEventListener("beforeunload",clearChart);
 }

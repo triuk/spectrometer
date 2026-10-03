@@ -13,7 +13,6 @@ import {
   confirmCalibration,
   captureDarkSpectrum,
   clearDarkSpectrum,
-  drawEmptyPlot,
   drawPlot,
   endRoiDrag,
   exportCsv,
@@ -76,4 +75,4 @@ installExposureOptimizer();
 installImageSettingsControls();
 bindEvents();
 setRunningControls(false);
-drawEmptyPlot();
+drawPlot();

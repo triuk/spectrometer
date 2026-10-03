@@ -15,6 +15,7 @@ import {cameraOperations} from "./camera-operations.js";
 import {waitForVideoFrame} from "./video-frames.js";
 import {publish} from "./events.js";
 let processingController = null;
+let activeRenderer = null;
 
 export function initialiseCaptureSurface() {
   elements.captureCanvas.width = elements.video.videoWidth;
@@ -118,6 +119,7 @@ export function beginRoiDrag(event) {
   state.dragStart = pointerToVideo(event);
   state.pendingRoi = {...state.roi};
   setRunningControls();
+  publish("spectrum-change",state.measurementSnapshot);
 }
 
 export function updateRoiDrag(event) {
@@ -147,6 +149,7 @@ export function cancelRoiDrag() {
   state.dragStart = null;
   state.pendingRoi = null;
   updateRoiOutput(); drawOverlay(); setRunningControls();
+  publish("spectrum-change",state.measurementSnapshot);
 }
 export function setRoi(roi) {
   state.roi = normaliseRoi(roi);
@@ -341,8 +344,7 @@ export function confirmCalibration() {
   state.calibrationCaptureMode = {width,height}; state.calibrationEnabled = true;
   drawPlot();
 }
-function updateCalibrationStatus() {
-  const current = calibration();
+function updateCalibrationStatus(current = calibration()) {
   elements.calibrationStatus.textContent = current
     ? `Kalibrace aktivní pro ${current.captureMode.width} × ${current.captureMode.height}.`
     : "Kalibrace není platná pro tento režim. Graf používá pixely; zadejte body a potvrďte kalibraci.";
@@ -382,9 +384,25 @@ export function drawEmptyPlot() {
   plotContext.fillText("Spektrum se zobrazí po spuštění kamery.", width / 2, height / 2);
 }
 
+export function setSpectrumRenderer(renderer) {
+  activeRenderer = renderer;
+  state.plotRenderer = renderer ? "uplot" : "canvas";
+  drawPlot();
+}
 export function drawPlot() {
-  updateCalibrationStatus();
+  const currentCalibration = calibration();
+  updateCalibrationStatus(currentCalibration);
   const spectrum = processedSpectrum();
+  if (spectrum) updatePeak(spectrum.luminance);
+  else elements.peakOutput.textContent = "Maximum: –";
+  publish("spectrum-change",state.measurementSnapshot);
+  if (activeRenderer) {
+    try {activeRenderer(spectrum,currentCalibration); return;}
+    catch (error) {activeRenderer = null; state.plotRenderer = "canvas"; publish("renderer-error",error);}
+  }
+  drawCanvasPlot(spectrum);
+}
+function drawCanvasPlot(spectrum) {
   if (!spectrum) return drawEmptyPlot();
   resizePlot();
   const ratio = window.devicePixelRatio || 1;
@@ -406,7 +424,6 @@ export function drawPlot() {
   plotContext.fillRect(0, 0, width, height);
   drawGrid(margin, plotWidth, plotHeight, maximum, spectrum.luminance.length, ratio);
   for (const [name, , color] of channels) drawChannel(spectrum[name], color, margin, plotWidth, plotHeight, maximum);
-  updatePeak(spectrum.luminance);
 }
 
 function drawGrid(margin, plotWidth, plotHeight, maximum, count, ratio) {
