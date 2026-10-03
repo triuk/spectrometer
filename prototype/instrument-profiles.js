@@ -1,6 +1,8 @@
 import { clamp, elements, setControlStatus, state, toFiniteNumber } from "./core.js";
 import { clearDarkSpectrum, drawPlot } from "./spectrum.js";
 
+import { normaliseProfile, validateProfile } from "./profile-schema.js";
+
 const SCHEMA_VERSION = 1;
 const LOCAL_PROFILES_KEY = "spectrometer.instrumentProfiles";
 const SELECTED_PROFILE_KEY = "spectrometer.selectedInstrumentProfile";
@@ -19,69 +21,6 @@ function clone(value) {
 
 function finite(value) {
   return Number.isFinite(Number(value));
-}
-
-function validateProfile(profile) {
-  if (!profile || typeof profile !== "object") throw new Error("Profil není JSON objekt.");
-  if (profile.schemaVersion !== SCHEMA_VERSION) throw new Error(`Nepodporovaná verze profilu: ${profile.schemaVersion ?? "?"}.`);
-  if (!profile.id || typeof profile.id !== "string") throw new Error("Profil nemá platné id.");
-  if (!profile.name || typeof profile.name !== "string") throw new Error("Profil nemá název.");
-
-  const orientation = profile.sensorOrientation;
-  if (orientation && typeof orientation.flipX !== "boolean") {
-    throw new Error("Profil nemá platnou orientaci senzoru.");
-  }
-
-  const roi = profile.roi;
-  if (!roi || ![roi.x, roi.y, roi.width, roi.height].every(finite) || Number(roi.width) <= 0 || Number(roi.height) <= 0) {
-    throw new Error("Profil nemá platnou ROI.");
-  }
-  if (roi.coordinateSystem && roi.coordinateSystem !== "spectral") {
-    throw new Error("Profil používá nepodporovaný souřadnicový systém ROI.");
-  }
-
-  const calibration = profile.calibration;
-  if (!calibration || calibration.model !== "linear" || !Array.isArray(calibration.points) || calibration.points.length < 2) {
-    throw new Error("Profil musí obsahovat lineární kalibraci alespoň ze dvou bodů.");
-  }
-  for (const point of calibration.points) {
-    if (!finite(point.pixel) || !finite(point.wavelengthNm)) throw new Error("Kalibrační bod nemá platný pixel nebo vlnovou délku.");
-  }
-
-  return profile;
-}
-
-function normaliseProfile(profile) {
-  const normalised = clone(profile);
-  const width = Number(normalised.camera?.width);
-  const hasOrientation = typeof normalised.sensorOrientation?.flipX === "boolean";
-
-  // Starší profily ukládaly kalibrační pixel přímo v raw souřadnicích kamery.
-  if (!hasOrientation) {
-    if (Number.isFinite(width) && width > 0 && Array.isArray(normalised.calibration?.points)) {
-      normalised.calibration.points = normalised.calibration.points.map((point) => ({
-        ...point,
-        pixel: width - 1 - Number(point.pixel),
-      }));
-    }
-    normalised.sensorOrientation = { flipX: true };
-  }
-
-  // Starší ROI byla ukládána v raw souřadnicích kamery. V profilu ji držíme
-  // v uživatelském spektrálním systému, zatímco runtime state.roi zůstává raw.
-  if (normalised.roi && normalised.roi.coordinateSystem !== "spectral") {
-    if (normalised.sensorOrientation?.flipX && Number.isFinite(width) && width > 0) {
-      normalised.roi.x = width - Number(normalised.roi.x) - Number(normalised.roi.width);
-    }
-    normalised.roi.coordinateSystem = "spectral";
-  }
-
-  if (normalised.display && Object.prototype.hasOwnProperty.call(normalised.display, "reverseSpectrum")) {
-    delete normalised.display.reverseSpectrum;
-    if (!Object.keys(normalised.display).length) delete normalised.display;
-  }
-
-  return normalised;
 }
 
 function loadLocalProfiles() {
