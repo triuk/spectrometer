@@ -16,6 +16,7 @@ export function createOperationController(onChange = () => {}) {
       active = operation;
       onChange(active);
       try { return await task(operation); }
+      catch (error) { operation.controller.abort(); throw error; }
       finally { if (active === operation) { active = null; onChange(null); } }
     },
   };
@@ -30,7 +31,9 @@ export function abortable(promise, signal, timeoutMs = 5000) {
       callback(value);
     };
     const onAbort = () => finish(reject, abortError());
-    const timer = setTimeout(() => finish(reject, new Error('Kamera neodpověděla v časovém limitu.')), timeoutMs);
+    const timer = setTimeout(() => {
+      const error = new Error("Kamera neodpověděla v časovém limitu."); error.name = "TimeoutError"; finish(reject,error);
+    }, timeoutMs);
     signal?.addEventListener('abort', onAbort, {once:true});
     Promise.resolve(promise).then(value => finish(resolve,value), error => finish(reject,error));
   });

@@ -1,6 +1,7 @@
+import {events} from "./events.js";
 import {cameraOperations} from "./camera-operations.js";
 import {waitForVideoFrame} from "./video-frames.js";
-import {applyImageConstraints, measurementExposureRange} from "./camera-constraints.js";
+import {applyImageConstraints, measurementExposureRange, settleCamera} from "./camera-constraints.js";
 import { captureContext, elements, setControlStatus, state } from "./core.js";
 
 const DEFAULT_STEP = 25;
@@ -287,7 +288,7 @@ function summaryText(result) {
 
 function syncUiRunning() {
   if (!ui) return;
-  ui.start.disabled = running || !state.track || Boolean(cameraOperations.active);
+  ui.start.disabled = running || !state.measurementReady || Boolean(cameraOperations.active);
   ui.stop.disabled = !running;
   ui.step.disabled = running;
   ui.maxFrames.disabled = running;
@@ -308,13 +309,14 @@ async function restoreExposure(track, exposure, range) {
   if (!track || track !== state.track || !Number.isFinite(exposure)) return;
   try {
     await applyImageConstraints(track, {exposureMode:"manual", exposureTime:quantize(exposure,range)});
+    await settleCamera(track);
   } catch (error) {
     console.warn("Exposure could not be restored after diagnostics.", error);
   }
 }
 
 async function runDiagnosticSweep(signal) {
-  if (running || !state.track) return;
+  if (running || !state.measurementReady) return;
   const range = exposureRange();
   if (!range) {
     ui.status.textContent = "Kamera nezpřístupnila ruční expoziční čas.";
@@ -526,14 +528,7 @@ function createUi() {
   });
   ui.exportJson.addEventListener("click", exportJson);
   ui.exportCsv.addEventListener("click", exportCsv);
-  const observer = window.setInterval(() => {
-    if (!ui) return;
-    if (!running) ui.status.textContent = lastResult
-      ? ui.status.textContent
-      : state.track ? "Připraveno k měření." : "Kamera není spuštěna.";
-    syncUiRunning();
-  }, 500);
-  window.addEventListener("beforeunload", () => window.clearInterval(observer));
+  for (const type of ["camera-operation","camera-state"]) events.addEventListener(type,syncUiRunning);
   syncUiRunning();
 }
 

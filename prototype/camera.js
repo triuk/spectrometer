@@ -1,4 +1,7 @@
-import {cameraOperations} from "./camera-operations.js";
+import {cameraOperations, abortable, abortError} from "./camera-operations.js";
+import {applyImageConstraints, measurementExposureRange, quantize, settleCamera} from "./camera-constraints.js";
+import {applyInstrumentProfile} from "./instrument-profiles.js";
+import {publish} from "./events.js";
 import {
   clamp,
   elements,
@@ -12,6 +15,8 @@ import {
   clearOverlay,
   clearProcessingState,
   drawEmptyPlot,
+  invalidateMeasurement,
+  drawPlot,
   initialiseCaptureSurface,
   initialiseDefaultRoi,
   observePreviewSize,
@@ -28,19 +33,7 @@ const DEFAULT_CAMERA = {
   frameRate: 5,
 };
 
-const MODE_CONTROLS = [
-  ["exposureMode", "Režim expozice"],
-  ["whiteBalanceMode", "White balance"],
-];
-
-const NUMERIC_CONTROLS = [
-  ["exposureTime", "Expozice"],
-  ["colorTemperature", "Teplota bílé"],
-  ["brightness", "Jas"],
-  ["contrast", "Kontrast"],
-  ["saturation", "Saturace"],
-  ["sharpness", "Ostrost"],
-];
+const NUMERIC_CONTROLS = [["exposureTime","Expozice"],["colorTemperature","Teplota bílé"]];
 
 function desiredCamera() {
   const camera = state.instrumentProfile?.camera ?? {};
@@ -150,20 +143,32 @@ function getCapabilities(track) {
   }
 }
 
-async function waitForMetadata() {
+async function waitForMetadata(signal) {
   if (elements.video.videoWidth && elements.video.videoHeight) return;
-  await new Promise((resolve) => elements.video.addEventListener("loadedmetadata", resolve, { once: true }));
+  let listener;
+  try {
+    await abortable(new Promise(resolve => {
+      listener = resolve; elements.video.addEventListener("loadedmetadata",listener,{once:true});
+    }),signal);
+  } finally { elements.video.removeEventListener("loadedmetadata",listener); }
+}
+async function openMediaStream(constraints,signal) {
+  const request = navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+    if (signal?.aborted) {stopStream(stream); throw abortError();}
+    return stream;
+  });
+  return abortable(request,signal,30000);
 }
 
 function stopStream(stream) {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
-async function openCameraDevice(deviceId) {
-  return navigator.mediaDevices.getUserMedia({
+async function openCameraDevice(deviceId,signal) {
+  return openMediaStream({
     audio: false,
     video: { deviceId: { exact: deviceId } },
-  });
+  },signal);
 }
 
 async function videoInputs() {
@@ -179,7 +184,7 @@ async function findProfileVideoInput() {
   return devices.find((device) => device.deviceId && labelMatchesProfile(device.label)) ?? null;
 }
 
-async function requestCameraStream() {
+async function requestCameraStream(signal) {
   const expected = desiredCamera().labelContains.trim();
   const deviceId = savedDeviceId();
 
@@ -188,13 +193,14 @@ async function requestCameraStream() {
   // i label a při neúspěchu zařízení znovu hledáme podle profilu.
   if (deviceId) {
     try {
-      const stream = await openCameraDevice(deviceId);
+      const stream = await openCameraDevice(deviceId,signal);
       const track = stream.getVideoTracks()[0];
       if (!expected || labelMatchesProfile(track?.label ?? "")) return stream;
       console.warn(`Saved camera no longer matches profile: ${track?.label ?? "unknown"}.`);
       stopStream(stream);
       forgetSavedDevice();
     } catch (error) {
+      if (error.name === "AbortError" || signal.aborted) throw error;
       console.warn("Saved camera is unavailable; rediscovering the profile camera.", error);
       forgetSavedDevice();
     }
@@ -203,13 +209,13 @@ async function requestCameraStream() {
   // Pokud už má origin oprávnění, enumerateDevices() obvykle vrátí i názvy
   // zařízení a můžeme spektrometr otevřít rovnou podle labelContains.
   let matchingDevice = await findProfileVideoInput();
-  if (matchingDevice) return openCameraDevice(matchingDevice.deviceId);
+  if (matchingDevice) return openCameraDevice(matchingDevice.deviceId,signal);
 
   // Před prvním povolením kamery jsou labely z privacy důvodů prázdné.
   // Otevřeme tedy dočasně výchozí kameru, čímž uživatel udělí oprávnění,
   // a následně zařízení znovu enumerujeme. Pokud je výchozí kamera rovnou
   // spektrometr, není potřeba stream otevírat podruhé.
-  const probeStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  const probeStream = await openMediaStream({audio:false,video:true},signal);
   const probeTrack = probeStream.getVideoTracks()[0];
   if (!expected || labelMatchesProfile(probeTrack?.label ?? "")) return probeStream;
 
@@ -217,7 +223,7 @@ async function requestCameraStream() {
     matchingDevice = await findProfileVideoInput();
     if (matchingDevice) {
       stopStream(probeStream);
-      return await openCameraDevice(matchingDevice.deviceId);
+      return await openCameraDevice(matchingDevice.deviceId,signal);
     }
 
     const devices = await videoInputs();
@@ -233,12 +239,14 @@ async function requestCameraStream() {
   }
 }
 
-async function selectBestCaptureProfile(track) {
+async function selectBestCaptureProfile(track,signal) {
   for (const profile of captureProfiles()) {
     try {
-      await track.applyConstraints(profile.constraints);
+      await abortable(track.applyConstraints(profile.constraints),signal);
+      if (track !== state.track || signal.aborted) throw abortError();
       return profile;
     } catch (error) {
+      if (error.name === "AbortError" || signal.aborted) throw error;
       console.warn(`Capture profile ${profile.id} is unavailable.`, error);
     }
   }
@@ -258,8 +266,7 @@ function labelMatchesProfile(label) {
 function isOptimalCapture(profile, settings, label) {
   const desired = desiredCamera();
   const frameRate = Number(settings.frameRate);
-  return profile.id === "profile-exact"
-    && labelMatchesProfile(label)
+  return labelMatchesProfile(label)
     && settings.width === desired.width
     && settings.height === desired.height
     && Number.isFinite(frameRate)
@@ -280,7 +287,7 @@ function renderCaptureMode(profile) {
     ? `${settings.width} × ${settings.height}`
     : "Nezjištěno";
   elements.captureFrameRate.textContent = Number.isFinite(frameRate)
-    ? `${frameRate.toFixed(frameRate % 1 ? 2 : 0)} fps`
+    ? `${frameRate.toFixed(frameRate % 1 ? 2 : 0)} fps · ${(1000/frameRate).toFixed(0)} ms/snímek`
     : "Nezjištěno";
   elements.captureFormat.textContent = "Nezjištěno – Chromium údaj neposkytuje";
   elements.captureModeStatus.title = optimal
@@ -299,81 +306,69 @@ function resetCaptureMode() {
 }
 
 export async function startCamera() {
-  stopCamera();
-  setCameraStatus("Čekám na kameru…");
-
+  if (state.track || state.starting) return;
   try {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("MediaDevices API není dostupné.");
-
-    state.stream = await requestCameraStream();
-    state.track = state.stream.getVideoTracks()[0];
-    state.captureProfile = await selectBestCaptureProfile(state.track);
-    state.capabilities = getCapabilities(state.track);
-
-    const settings = state.track.getSettings();
-    if (settings.deviceId) rememberDeviceId(settings.deviceId);
-
-    elements.video.srcObject = state.stream;
-    await elements.video.play();
-    await waitForMetadata();
-
-    initialiseCaptureSurface();
-    elements.videoStage.style.aspectRatio = `${elements.video.videoWidth} / ${elements.video.videoHeight}`;
-    initialiseDefaultRoi();
-    clearProcessingState();
-    renderCaptureMode(state.captureProfile);
-    renderCameraControls();
-    updateDiagnostics();
-    state.measurementReady = true;
-    startProcessingLoop();
-    observePreviewSize();
-
-    elements.videoPlaceholder.hidden = true;
-    setCameraStatus(state.track.label || "Kamera běží", "running");
-    setRunningControls(true);
+    await cameraOperations.run("start", async ({signal}) => {
+      state.starting = true;
+      state.session += 1;
+      setCameraStatus("Čekám na kameru…"); setRunningControls(); publish("camera-state");
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("MediaDevices API není dostupné.");
+      if (!state.instrumentProfile) throw new Error("Vyberte platný profil spektrometru.");
+      state.stream = await requestCameraStream(signal);
+      if (signal.aborted) {stopStream(state.stream); throw abortError();}
+      const track = state.stream.getVideoTracks()[0];
+      state.track = track;
+      track.addEventListener("ended", () => {
+        if (track === state.track) {stopCamera(); setCameraStatus("Kamera byla odpojena.","error");}
+      }, {once:true});
+      state.captureProfile = await selectBestCaptureProfile(track,signal);
+      state.capabilities = getCapabilities(track);
+      const settings = track.getSettings();
+      if (settings.deviceId) rememberDeviceId(settings.deviceId);
+      elements.video.srcObject = state.stream;
+      await abortable(elements.video.play(),signal);
+      await waitForMetadata(signal);
+      initialiseCaptureSurface();
+      elements.videoStage.style.aspectRatio = `${elements.video.videoWidth} / ${elements.video.videoHeight}`;
+      initialiseDefaultRoi();
+      await applyInstrumentProfile(state.instrumentProfile,{signal});
+      await settleCamera(track,signal);
+      if (signal.aborted || track !== state.track) throw abortError();
+      state.measurementReady = true;
+      state.starting = false;
+      renderCaptureMode(state.captureProfile);
+      renderCameraControls(); updateDiagnostics();
+      observePreviewSize(); startProcessingLoop();
+      elements.videoPlaceholder.hidden = true;
+      setCameraStatus(track.label || "Kamera běží","running");
+      publish("camera-state");
+    });
   } catch (error) {
-    console.error(error);
+    if (error.name === "CameraBusyError") {setControlStatus(error.message,true); return;}
     stopCamera();
-    setCameraStatus(
-      error?.name === "NotAllowedError" ? "Přístup ke kameře byl zamítnut." : `Chyba: ${error.message}`,
-      "error",
-    );
-  }
+    if (error.name !== "AbortError") setCameraStatus(error.name === "NotAllowedError"
+      ? "Přístup ke kameře byl zamítnut." : `Chyba: ${error.message}`,"error");
+  } finally {setRunningControls();}
 }
 
 export function stopCamera() {
   cameraOperations.cancel();
   state.session += 1;
-  state.measurementReady = false;
+  state.measurementReady = false; state.starting = false;
   stopProcessing();
-  state.resizeObserver?.disconnect();
-  state.resizeObserver = null;
-  state.stream?.getTracks().forEach((track) => track.stop());
-  Object.assign(state, {
-    stream: null,
-    track: null,
-    capabilities: {},
-    captureProfile: null,
-    roi: null,
-    dragStart: null,
-    spectrumHistory: [],
-    averagedSpectrum: null,
-  });
-
+  state.resizeObserver?.disconnect(); state.resizeObserver = null;
+  stopStream(state.stream);
+  Object.assign(state,{stream:null,track:null,capabilities:{},captureProfile:null,roi:null,dragStart:null,pendingRoi:null});
+  invalidateMeasurement("Kamera byla zastavena.");
   elements.video.srcObject = null;
   elements.videoPlaceholder.hidden = false;
   elements.frameStatus.textContent = "–";
-  elements.settingsOutput.textContent = "–";
-  elements.capabilitiesOutput.textContent = "–";
+  elements.settingsOutput.textContent = "–"; elements.capabilitiesOutput.textContent = "–";
   elements.cameraControls.innerHTML = '<p class="hint">Nastavení se načte po spuštění kamery.</p>';
   elements.controlStatus.textContent = "";
   elements.roiOutput.textContent = "ROI: –";
-  elements.peakOutput.textContent = "Maximum: –";
-  resetCaptureMode();
-  setCameraStatus("Kamera není spuštěna");
-  setRunningControls(false);
-  clearOverlay();
-  drawEmptyPlot();
+  resetCaptureMode(); setCameraStatus("Kamera není spuštěna"); setRunningControls();
+  clearOverlay(); drawPlot(); publish("camera-state");
 }
 
 function renderCameraControls() {
@@ -381,15 +376,8 @@ function renderCameraControls() {
   const settings = state.track.getSettings();
   let count = 0;
 
-  for (const [name, label] of MODE_CONTROLS) {
-    const options = state.capabilities[name];
-    if (!Array.isArray(options) || !options.length) continue;
-    elements.cameraControls.append(createModeControl(name, label, options, settings[name]));
-    count += 1;
-  }
-
   for (const [name, label] of NUMERIC_CONTROLS) {
-    const capability = state.capabilities[name];
+    const capability = name === "exposureTime" ? measurementExposureRange() : state.capabilities[name];
     if (!capability || typeof capability.min !== "number" || typeof capability.max !== "number") continue;
     elements.cameraControls.append(createNumericControl(name, label, capability, settings[name]));
     count += 1;
@@ -399,27 +387,6 @@ function renderCameraControls() {
     elements.cameraControls.innerHTML = '<p class="hint">Prohlížeč nezpřístupnil žádné nastavitelné parametry.</p>';
   }
   setRunningControls(true);
-}
-
-function createModeControl(name, labelText, options, value) {
-  const row = document.createElement("div");
-  row.className = "camera-control";
-  const label = document.createElement("label");
-  label.htmlFor = `control-${name}`;
-  label.textContent = labelText;
-  const select = document.createElement("select");
-  select.id = `control-${name}`;
-  select.dataset.cameraControl = name;
-  for (const optionValue of options) {
-    const option = document.createElement("option");
-    option.value = optionValue;
-    option.textContent = ({ manual: "Ruční", continuous: "Automatický", none: "Vypnuto" })[optionValue] ?? optionValue;
-    select.append(option);
-  }
-  if (options.includes(value)) select.value = value;
-  select.addEventListener("change", () => applyTrackConstraint(name, select.value));
-  row.append(label, select);
-  return row;
 }
 
 function createNumericControl(name, labelText, capability, value) {
@@ -451,40 +418,23 @@ function createNumericControl(name, labelText, capability, value) {
   return row;
 }
 
-async function applyTrackConstraint(name, value) {
-  const sequence = ++state.controlApplySequence;
-  setControlStatus(`Nastavuji ${name}…`);
+export async function applyTrackConstraint(name,value) {
+  const track = state.track;
+  if (!state.measurementReady || !Number.isFinite(value) || !NUMERIC_CONTROLS.some(([key])=>key===name)) return;
   try {
-    await state.track.applyConstraints({ advanced: [{ [name]: value }] });
-    if (sequence !== state.controlApplySequence) return;
-    updateDiagnostics();
-    syncControlValues();
-    setControlStatus(`${name}: ${value}`);
+    await cameraOperations.run("manual",async ({signal}) => {
+      const range = name === "exposureTime" ? measurementExposureRange() : state.capabilities[name];
+      if (!range) throw new Error("Parametr není dostupný.");
+      const requested = quantize(value,range);
+      setControlStatus(`Nastavuji ${name}…`);
+      await applyImageConstraints(track,{[name]:requested},signal);
+      await settleCamera(track,signal);
+      if (track !== state.track || signal.aborted) throw abortError();
+      updateDiagnostics(); syncControlValues(); setControlStatus(`${name}: ${requested}`);
+    });
   } catch (error) {
-    console.error(error);
-    setControlStatus(`Nelze nastavit ${name}: ${error.message}`, true);
-    updateDiagnostics();
-    syncControlValues();
-  }
-}
-
-export async function enableManualModes() {
-  if (!state.track) return;
-  const constraints = {};
-  if (state.capabilities.exposureMode?.includes("manual")) constraints.exposureMode = "manual";
-  if (state.capabilities.whiteBalanceMode?.includes("manual")) constraints.whiteBalanceMode = "manual";
-  elements.manualModeButton.disabled = true;
-  setControlStatus("Přepínám na ruční režim…");
-  try {
-    await state.track.applyConstraints({ advanced: [constraints] });
-    updateDiagnostics();
-    syncControlValues();
-    setControlStatus("Ruční režim je aktivní.");
-  } catch (error) {
-    setControlStatus(`Ruční režim nelze nastavit: ${error.message}`, true);
-  } finally {
-    setRunningControls(true);
-  }
+    if (error.name !== "AbortError") setControlStatus(`Nelze nastavit ${name}: ${error.message}`,true);
+  } finally {syncControlValues(); setRunningControls();}
 }
 
 function syncControlValues() {

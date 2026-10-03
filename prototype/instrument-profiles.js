@@ -1,5 +1,9 @@
+import {cameraOperations} from "./camera-operations.js";
+import {configureMeasurementCamera} from "./camera-constraints.js";
+import {startCamera,stopCamera} from "./camera.js";
+import {events,publish} from "./events.js";
 import { clamp, elements, setControlStatus, state, toFiniteNumber } from "./core.js";
-import { clearDarkSpectrum, drawPlot, setRoi, calibration } from "./spectrum.js";
+import { drawPlot, setRoi, calibration, resizeOverlay, invalidateMeasurement } from "./spectrum.js";
 
 import { normaliseProfile, validateProfile } from "./profile-schema.js";
 
@@ -12,15 +16,9 @@ const builtInProfiles = new Map();
 const localProfiles = new Map();
 let activeSource = null;
 let ui = null;
-let observedTrack = null;
-let applyTimer = null;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
-}
-
-function finite(value) {
-  return Number.isFinite(Number(value));
 }
 
 function loadLocalProfiles() {
@@ -127,6 +125,7 @@ function refreshSelect() {
     const group = document.createElement("optgroup");
     group.label = "Vestavěné";
     for (const profile of builtInProfiles.values()) {
+      if (localProfiles.has(profile.id)) continue;
       const option = new Option(profile.name, profile.id);
       group.append(option);
     }
@@ -179,58 +178,38 @@ function applyRoi(profile) {
   elements.roiOutput.textContent = `ROI: x ${spectralX}, y ${y}, ${roiWidth} × ${roiHeight}`;
 }
 
-async function applyCameraSettings(profile) {
-  const track = state.track;
-  if (!track) return;
-  const capabilities = state.capabilities;
-  const settings = profile.cameraSettings ?? {};
-  const values = {};
-
-  if (Array.isArray(capabilities.exposureMode) && capabilities.exposureMode.includes("manual")) values.exposureMode = "manual";
-  if (Array.isArray(capabilities.whiteBalanceMode) && capabilities.whiteBalanceMode.includes("manual")) values.whiteBalanceMode = "manual";
-
-  const mapping = {
-    whiteBalance: "colorTemperature",
-    brightness: "brightness",
-    contrast: "contrast",
-    saturation: "saturation",
-    sharpness: "sharpness",
-  };
-  for (const [profileKey, controlName] of Object.entries(mapping)) {
-    const requested = Number(settings[profileKey]);
-    const range = capabilities[controlName];
-    if (!Number.isFinite(requested) || !range || !finite(range.min) || !finite(range.max)) continue;
-    values[controlName] = clamp(requested, Number(range.min), Number(range.max));
-  }
-
-  if (Object.keys(values).length) await track.applyConstraints({ advanced: [values] });
-}
-
-export async function applyInstrumentProfile(profile = state.instrumentProfile) {
+export async function applyInstrumentProfile(profile = state.instrumentProfile,{signal} = {}) {
   if (!profile) return;
   validateProfile(profile);
+  if (cameraOperations.active && !signal) throw new Error("Probíhá jiná operace kamery.");
   applyCalibration(profile);
-
   if (state.track) {
     applyRoi(profile);
-    if (state.darkSpectrum) clearDarkSpectrum();
-    await applyCameraSettings(profile);
-    window.dispatchEvent(new Event("resize"));
-    drawPlot();
+    await configureMeasurementCamera(profile,signal);
+    resizeOverlay();
   }
-
+  drawPlot();
   if (ui) ui.status.textContent = `Aktivní profil: ${profile.name}`;
 }
-
-function activate(profile, source, applyNow = true) {
+async function activate(profile,source,applyNow = true) {
   validateProfile(profile);
+  if (cameraOperations.active || state.dragStart) throw new Error("Profil nelze změnit během operace kamery nebo výběru ROI.");
+  const restart = applyNow && Boolean(state.track);
+  if (restart) stopCamera();
   state.instrumentProfile = clone(profile);
   activeSource = source;
-  localStorage.setItem(SELECTED_PROFILE_KEY, profile.id);
-  refreshSelect();
-  ui.select.value = profile.id;
+  try {localStorage.setItem(SELECTED_PROFILE_KEY,profile.id);} catch (error) {console.warn("Výběr profilu nelze uložit.",error);}
+  refreshSelect(); ui.select.value = profile.id;
   ui.status.textContent = `Aktivní profil: ${profile.name}`;
-  if (applyNow) void applyInstrumentProfile(state.instrumentProfile);
+  if (restart) await startCamera();
+  else if (applyNow) await applyInstrumentProfile(state.instrumentProfile);
+  else invalidateMeasurement("Profil byl uložen.");
+  publish("profile-change");
+}
+function syncProfileUi() {
+  if (!ui) return;
+  const busy = Boolean(cameraOperations.active) || Boolean(state.dragStart);
+  for (const control of [ui.select,ui.save,ui.importButton,ui.exportButton,ui.file]) control.disabled = busy;
 }
 
 function slug(text) {
@@ -319,7 +298,7 @@ function downloadProfile(profile) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function saveCurrentLocally() {
+async function saveCurrentLocally() {
   const current = state.instrumentProfile;
   let id = current?.id;
   let name = current?.name;
@@ -334,7 +313,7 @@ function saveCurrentLocally() {
   const profile = buildCurrentProfile({ id, name });
   localProfiles.set(profile.id, profile);
   persistLocalProfiles();
-  activate(profile, "local", false);
+  await activate(profile, "local", false);
   ui.status.textContent = `Profil ${profile.name} byl uložen lokálně.`;
 }
 
@@ -342,18 +321,20 @@ async function importProfile(file) {
   const profile = validateProfile(normaliseProfile(JSON.parse(await file.text())));
   localProfiles.set(profile.id, profile);
   persistLocalProfiles();
-  activate(profile, "local", true);
+  await activate(profile, "local", true);
   ui.status.textContent = `Importován profil: ${profile.name}`;
 }
 
 function bindUi() {
-  ui.select.addEventListener("change", () => {
+  ui.select.addEventListener("change", async () => {
     const found = profileById(ui.select.value);
-    if (found) activate(found.profile, found.source, true);
+    try {if (found) await activate(found.profile,found.source,true);}
+    catch (error) {ui.status.textContent = error.message; refreshSelect();}
   });
 
-  ui.save.addEventListener("click", saveCurrentLocally);
+  ui.save.addEventListener("click", () => {void saveCurrentLocally().catch(error=>{ui.status.textContent=error.message;});});
   ui.exportButton.addEventListener("click", () => {
+    try {
     const current = state.instrumentProfile;
     const profile = buildCurrentProfile({
       id: current?.id ?? `spectrometer-${Date.now().toString(36)}`,
@@ -361,6 +342,7 @@ function bindUi() {
     });
     downloadProfile(profile);
     ui.status.textContent = `Exportován profil: ${profile.name}`;
+    } catch (error) {ui.status.textContent=error.message;}
   });
 
   ui.importButton.addEventListener("click", () => ui.file.click());
@@ -377,20 +359,6 @@ function bindUi() {
   });
 }
 
-function watchCamera() {
-  if (state.track === observedTrack) return;
-  observedTrack = state.track;
-  window.clearTimeout(applyTimer);
-  if (!state.track || !state.instrumentProfile) return;
-  const track = state.track;
-  applyTimer = window.setTimeout(() => {
-    if (track === state.track) void applyInstrumentProfile(state.instrumentProfile).catch((error) => {
-      console.error(error);
-      setControlStatus(`Profil spektrometru nelze použít: ${error.message}`, true);
-    });
-  }, 1000);
-}
-
 export async function installInstrumentProfiles() {
   makeUi();
   loadLocalProfiles();
@@ -404,10 +372,12 @@ export async function installInstrumentProfiles() {
   }
 
   refreshSelect();
-  const requested = localStorage.getItem(SELECTED_PROFILE_KEY);
+  let requested;
+  try {requested=localStorage.getItem(SELECTED_PROFILE_KEY);} catch {}
   const selected = profileById(requested) ?? profileById("lgs-default") ?? (builtInProfiles.size ? { profile: builtInProfiles.values().next().value, source: "built-in" } : null);
-  if (selected) activate(selected.profile, selected.source, false);
+  if (selected) await activate(selected.profile, selected.source, true);
   else ui.status.textContent = "Není dostupný žádný profil.";
 
-  window.setInterval(watchCamera, 250);
+  for (const type of ["camera-operation","camera-state","spectrum-change","profile-change"]) events.addEventListener(type,syncProfileUi);
+  syncProfileUi();
 }

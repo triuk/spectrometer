@@ -27,18 +27,6 @@ function syncExposureControls(value) {
   }
 }
 
-function installUiAdjustments() {
-  if (document.querySelector("#exposureOptimizerStyle")) return;
-  const style = document.createElement("style");
-  style.id = "exposureOptimizerStyle";
-  style.textContent = `
-    .measurement-camera-mode .manual-image-section > .image-subheading {
-      display: none !important;
-    }
-  `;
-  document.head.append(style);
-}
-
 function setBusy(busy) {
   elements.autoModeButton.textContent = busy
     ? "Optimalizuji expozici…"
@@ -302,7 +290,7 @@ export async function optimizeExposure() {
     await cameraOperations.run("optimize", async ({signal:id}) => {
       const track = state.track;
       const range = exposureRange();
-      if (!track || !range) throw new Error("Kamera nezpřístupnila ruční expoziční čas.");
+      if (!state.measurementReady || !track || !range) throw new Error("Kamera nezpřístupnila ruční expoziční čas.");
       const samples = [];
       const current = Number(track.getSettings().exposureTime) || range.min;
       const profile = optimizerProfile();
@@ -327,15 +315,13 @@ export async function optimizeExposure() {
 }
 
 export function installExposureOptimizer() {
-  installUiAdjustments();
   setBusy(false);
 
   elements.autoModeButton.addEventListener("click", (event) => {
-    if (!state.track) return;
+    if (!state.measurementReady) return;
     event.preventDefault();
-    event.stopImmediatePropagation();
     optimizeExposure();
-  }, { capture: true });
+  });
 
 
 }

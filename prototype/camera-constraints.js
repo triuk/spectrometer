@@ -1,8 +1,10 @@
-import {state} from './core.js';
+import {waitForVideoFrame} from "./video-frames.js";
+import {elements,state} from './core.js';
 import {publish} from './events.js';
 import {abortable, abortError} from './camera-operations.js';
 import {clearDarkSpectrum, clearProcessingState} from './spectrum.js';
-export {quantize} from "./exposure-model.js";
+import {quantize} from "./exposure-model.js";
+export {quantize};
 export function measurementExposureRange() {
   const range = state.capabilities.exposureTime;
   if (!range || !Number.isFinite(range.min) || !Number.isFinite(range.max)) return null;
@@ -36,4 +38,33 @@ export async function applyImageConstraints(track, values, signal) {
   }
   publish('camera-settings',settings);
   return settings;
+}
+
+export async function settleCamera(track, signal) {
+  const count = state.instrumentProfile?.exposureOptimization?.freshFrames ?? 5;
+  for (let index=0;index<count;index++) {
+    await waitForVideoFrame(elements.video,{signal,track});
+    if (track !== state.track || signal?.aborted) throw abortError();
+  }
+}
+export async function configureMeasurementCamera(profile, signal) {
+  const values = {};
+  for (const name of ['exposureMode','whiteBalanceMode']) {
+    const modes = state.capabilities[name];
+    if (Array.isArray(modes)) {
+      if (!modes.includes('manual')) throw new Error(`Kamera nepodporuje ruční ${name}.`);
+      values[name] = 'manual';
+    }
+  }
+  const settings = profile.cameraSettings ?? {};
+  const fixed = {colorTemperature:settings.whiteBalance ?? 4600,brightness:settings.brightness ?? 0,
+    contrast:settings.contrast ?? 32,saturation:settings.saturation ?? 50,sharpness:settings.sharpness ?? 1};
+  for (const [name,value] of Object.entries(fixed)) {
+    const range = state.capabilities[name];
+    if (range && Number.isFinite(range.min) && Number.isFinite(range.max)) values[name] = quantize(value,range);
+  }
+  const range = measurementExposureRange();
+  if (range) values.exposureTime = quantize(state.track.getSettings().exposureTime ?? range.min,range);
+  if (!Object.keys(values).length) throw new Error('Kamera neposkytuje ruční nastavení obrazu.');
+  return applyImageConstraints(state.track,values,signal);
 }
