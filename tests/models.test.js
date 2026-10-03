@@ -52,3 +52,14 @@ test('calibration requires its capture dimensions; CSV preserves raw and spectra
   assert.equal(rows[2], '0,5,4,,40.000000,50.000000,60.000000,48.150002');
   assert.equal(rows[3].split(',')[1], '6');
 });
+
+test('32-unit exposure segments never cross a discontinuity, including non-unit steps',async()=>{
+  const {piecewiseSegments}=await import('../prototype/exposure-model.js');
+  const segments=piecewiseSegments({min:1,max:1800,step:1},{period:32,origin:0});
+  assert.deepEqual(segments.slice(0,2),[{index:0,start:1,end:31},{index:1,start:32,end:63}]);
+  assert.equal(segments.at(-1).end,1800);
+  for (const segment of piecewiseSegments({min:1,max:1800,step:3},{period:32,origin:0})) {
+    assert.equal((segment.start-1)%3,0); assert.equal((segment.end-1)%3,0);
+    assert.equal(Math.floor(segment.start/32),Math.floor(segment.end/32));
+  }
+});

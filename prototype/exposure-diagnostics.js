@@ -1,3 +1,6 @@
+import {cameraOperations} from "./camera-operations.js";
+import {waitForVideoFrame} from "./video-frames.js";
+import {applyImageConstraints, measurementExposureRange} from "./camera-constraints.js";
 import { captureContext, elements, setControlStatus, state } from "./core.js";
 
 const DEFAULT_STEP = 25;
@@ -14,15 +17,7 @@ let ui = null;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-function exposureRange() {
-  const range = state.capabilities.exposureTime;
-  if (!range || !Number.isFinite(Number(range.min)) || !Number.isFinite(Number(range.max))) return null;
-  return {
-    min: Number(range.min),
-    max: Number(range.max),
-    step: Number(range.step) || 1,
-  };
-}
+const exposureRange = measurementExposureRange;
 
 function quantize(value, range) {
   return clamp(
@@ -119,24 +114,14 @@ function stableFrames(frames) {
   return peakSpan <= PEAK_TOLERANCE && meanSpan <= MEAN_TOLERANCE && exposureStable;
 }
 
-function nextVideoFrame() {
-  return new Promise((resolve) => {
-    if (typeof elements.video.requestVideoFrameCallback === "function") {
-      elements.video.requestVideoFrameCallback((now, metadata) => resolve({ now, metadata }));
-      return;
-    }
-    window.setTimeout(() => resolve({ now: performance.now(), metadata: {} }), 210);
-  });
-}
-
-async function collectSettlingFrames(maxFrames, changedAt) {
+async function collectSettlingFrames(maxFrames, changedAt, track, signal) {
   const frames = [];
   let settled = false;
 
   for (let index = 0; index < maxFrames; index += 1) {
-    if (stopRequested || !state.track) break;
-    const { now, metadata } = await nextVideoFrame();
-    if (stopRequested || !state.track) break;
+    if (stopRequested || track !== state.track || signal.aborted) break;
+    const { now, metadata } = await waitForVideoFrame(elements.video, {track,signal});
+    if (stopRequested || track !== state.track || signal.aborted) break;
     const metrics = frameMetrics();
     if (!metrics) continue;
     const settings = state.track.getSettings();
@@ -175,13 +160,13 @@ function finalMetrics(frames) {
   };
 }
 
-async function measureExposure(track, requestedExposure, range, direction, sequenceIndex, maxFrames) {
+async function measureExposure(track, requestedExposure, range, direction, sequenceIndex, maxFrames, signal) {
   const requested = quantize(requestedExposure, range);
   const applyStarted = performance.now();
-  await track.applyConstraints({ advanced: [{ exposureMode: "manual", exposureTime: requested }] });
+  await applyImageConstraints(track, {exposureMode:"manual", exposureTime:requested}, signal);
   const applyFinished = performance.now();
   const actualImmediately = Number(track.getSettings().exposureTime);
-  const settling = await collectSettlingFrames(maxFrames, applyFinished);
+  const settling = await collectSettlingFrames(maxFrames, applyFinished, track, signal);
   const final = finalMetrics(settling.frames);
 
   return {
@@ -302,7 +287,7 @@ function summaryText(result) {
 
 function syncUiRunning() {
   if (!ui) return;
-  ui.start.disabled = running || !state.track;
+  ui.start.disabled = running || !state.track || Boolean(cameraOperations.active);
   ui.stop.disabled = !running;
   ui.step.disabled = running;
   ui.maxFrames.disabled = running;
@@ -322,13 +307,13 @@ function setExposureInputsDisabled(disabled) {
 async function restoreExposure(track, exposure, range) {
   if (!track || track !== state.track || !Number.isFinite(exposure)) return;
   try {
-    await track.applyConstraints({ advanced: [{ exposureMode: "manual", exposureTime: quantize(exposure, range) }] });
+    await applyImageConstraints(track, {exposureMode:"manual", exposureTime:quantize(exposure,range)});
   } catch (error) {
     console.warn("Exposure could not be restored after diagnostics.", error);
   }
 }
 
-async function runDiagnostics() {
+async function runDiagnosticSweep(signal) {
   if (running || !state.track) return;
   const range = exposureRange();
   if (!range) {
@@ -369,8 +354,14 @@ async function runDiagnostics() {
         if (stopRequested || track !== state.track) break;
         const requested = direction.values[index];
         ui.status.textContent = `${direction.id === "forward" ? "Nahoru" : "Dolů"}: expozice ${requested} · bod ${completed + 1}/${total}`;
-        const point = await measureExposure(track, requested, range, direction.id, index, maxFrames);
-        points.push(point);
+        try {
+          const point = await measureExposure(track, requested, range, direction.id, index, maxFrames, signal);
+          points.push(point);
+        } catch (error) {
+          if (error.name !== "AbortError") throw error;
+          stopRequested = true;
+          break;
+        }
         completed += 1;
       }
       if (stopRequested || track !== state.track) break;
@@ -381,7 +372,7 @@ async function runDiagnostics() {
       kind: "spectrometer-exposure-diagnostic",
       startedAt,
       completedAt: new Date().toISOString(),
-      stopped: stopRequested,
+      stopped: stopRequested || signal.aborted || track !== state.track,
       profile: state.instrumentProfile ? { id: state.instrumentProfile.id, name: state.instrumentProfile.name } : null,
       camera: {
         label: track.label,
@@ -418,6 +409,11 @@ async function runDiagnostics() {
     if (elements.autoModeButton) elements.autoModeButton.disabled = !state.track;
     syncUiRunning();
   }
+}
+
+export async function runDiagnostics() {
+  try { await cameraOperations.run("diagnostics", ({signal}) => runDiagnosticSweep(signal)); }
+  catch (error) { if (error.name !== "AbortError") ui.status.textContent = error.message; }
 }
 
 function download(blob, filename) {
@@ -525,6 +521,7 @@ function createUi() {
   ui.start.addEventListener("click", () => void runDiagnostics());
   ui.stop.addEventListener("click", () => {
     stopRequested = true;
+    if (cameraOperations.active?.kind === "diagnostics") cameraOperations.cancel();
     ui.status.textContent = "Zastavuji po aktuálním snímku…";
   });
   ui.exportJson.addEventListener("click", exportJson);

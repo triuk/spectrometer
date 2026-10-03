@@ -1,3 +1,4 @@
+import {cameraOperations} from "./camera-operations.js";
 import {
   clamp,
   elements,
@@ -340,6 +341,7 @@ export async function startCamera() {
 }
 
 export function stopCamera() {
+  cameraOperations.cancel();
   stopProcessing();
   state.resizeObserver?.disconnect();
   state.resizeObserver = null;

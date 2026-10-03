@@ -1,3 +1,5 @@
+import {cameraOperations} from "./camera-operations.js";
+import {applyImageConstraints} from "./camera-constraints.js";
 import {
   elements,
   setControlStatus,
@@ -328,6 +330,7 @@ async function applyImageMode(mode, { initial = false } = {}) {
 
 async function applyControlValue(name, value) {
   if (!state.track || applying || !Number.isFinite(value)) return;
+  if (cameraOperations.active) { setControlStatus("Probíhá jiná operace kamery.", true); return; }
   if (AUTO_CONTROLLED_NAMES.has(name) && currentMode() !== "manual") {
     setControlStatus(`${CONTROL_LABELS[name]} lze měnit pouze v ručním režimu.`, true);
     syncImageSettingsUi({ syncControls: true });
@@ -341,7 +344,7 @@ async function applyControlValue(name, value) {
   try {
     // Posíláme jediný ImageCapture parametr. Rozlišení a FPS se zde nesmí
     // objevit, jinak Chromium požadavek odmítne jako smíšený.
-    await state.track.applyConstraints(advancedConstraints({ [name]: value }));
+    await cameraOperations.run("manual", ({signal}) => applyImageConstraints(state.track, {[name]:value}, signal));
     await new Promise((resolve) => window.setTimeout(resolve, 100));
 
     const actual = Number(state.track.getSettings()[name]);

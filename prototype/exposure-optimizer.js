@@ -1,5 +1,9 @@
+import {quantize, piecewiseSegments} from "./exposure-model.js";
 import { captureContext, elements, setControlStatus, state } from "./core.js";
 import { clearDarkSpectrum } from "./spectrum.js";
+import {cameraOperations} from "./camera-operations.js";
+import {waitForVideoFrame} from "./video-frames.js";
+import {applyImageConstraints, measurementExposureRange} from "./camera-constraints.js";
 
 const TARGET = 220;
 const TARGET_MIN = 205;
@@ -10,30 +14,9 @@ const DEFAULT_FRESH_FRAMES = 5;
 const DEFAULT_SAMPLE_FRAMES = 3;
 const MAX_SEGMENT_REFINEMENTS = 6;
 
-let optimizing = false;
-let runId = 0;
-let busyTimer = null;
-
-const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-function exposureRange() {
-  const range = state.capabilities.exposureTime;
-  if (!range || !Number.isFinite(range.min) || !Number.isFinite(range.max)) return null;
-  return {
-    min: Number(range.min),
-    max: Number(range.max),
-    step: Number(range.step) || 1,
-  };
-}
-
-function quantize(value, range) {
-  return clamp(
-    range.min + Math.round((value - range.min) / range.step) * range.step,
-    range.min,
-    range.max,
-  );
-}
+const exposureRange = measurementExposureRange;
 
 function syncExposureControls(value) {
   if (!Number.isFinite(Number(value))) return;
@@ -143,22 +126,11 @@ function optimizerProfile() {
   };
 }
 
-function nextVideoFrame() {
-  if (typeof elements.video.requestVideoFrameCallback === "function") {
-    return new Promise((resolve) => {
-      elements.video.requestVideoFrameCallback((_now, metadata) => resolve(metadata));
-    });
-  }
-
-  const fps = Number(state.track?.getSettings().frameRate) || 5;
-  return sleep(Math.max(40, 1000 / fps)).then(() => null);
-}
-
 async function measureFreshFrames(track, profile, id) {
   const peaks = [];
   for (let index = 0; index < profile.freshFrames; index += 1) {
-    await nextVideoFrame();
-    if (id !== runId || track !== state.track) return null;
+    await waitForVideoFrame(elements.video, {track, signal:id});
+    if (id.aborted || track !== state.track) return null;
     const peak = measurePeak();
     if (Number.isFinite(peak)) peaks.push(peak);
   }
@@ -183,15 +155,13 @@ function bestSample(samples) {
 }
 
 async function evaluate(track, requested, range, profile, samples, id, { force = false } = {}) {
-  if (id !== runId || track !== state.track) return null;
+  if (id.aborted || track !== state.track) return null;
   const targetExposure = quantize(requested, range);
   const existing = samples.find((sample) => sample.exposure === targetExposure);
   if (existing && !force) return existing;
 
-  await track.applyConstraints({
-    advanced: [{ exposureMode: "manual", exposureTime: targetExposure }],
-  });
-  if (id !== runId || track !== state.track) return null;
+  await applyImageConstraints(track, {exposureMode:"manual", exposureTime:targetExposure}, id);
+  if (id.aborted || track !== state.track) return null;
 
   const actualSetting = Number(track.getSettings().exposureTime);
   const exposure = Number.isFinite(actualSetting) ? actualSetting : targetExposure;
@@ -212,32 +182,6 @@ async function evaluate(track, requested, range, profile, samples, id, { force =
   return sample;
 }
 
-function piecewiseSegments(range, profile) {
-  if (!profile.period || profile.period <= range.step) return [];
-  const segments = [];
-  let index = Math.floor((range.min - profile.origin) / profile.period);
-  let guard = 0;
-
-  while (guard++ < 10000) {
-    const rawStart = profile.origin + index * profile.period;
-    const rawEnd = profile.origin + (index + 1) * profile.period - range.step;
-    const start = quantize(Math.max(range.min, rawStart), range);
-    const end = quantize(Math.min(range.max, rawEnd), range);
-    if (end >= start) segments.push({ index, start, end });
-    if (rawEnd >= range.max) break;
-    index += 1;
-  }
-
-  if (segments.length) {
-    const last = segments[segments.length - 1];
-    if (last.end < range.max) {
-      const nextStart = quantize(Math.max(range.min, profile.origin + (last.index + 1) * profile.period), range);
-      if (nextStart <= range.max) segments.push({ index: last.index + 1, start: nextStart, end: range.max });
-    }
-  }
-  return segments;
-}
-
 async function optimizePiecewise(track, range, profile, samples, id) {
   const segments = piecewiseSegments(range, profile);
   if (!segments.length) return null;
@@ -246,7 +190,7 @@ async function optimizePiecewise(track, range, profile, samples, id) {
   let highestBelow = null;
 
   for (let index = 0; index < segments.length; index += 1) {
-    if (id !== runId || track !== state.track) return null;
+    if (id.aborted || track !== state.track) return null;
     const segment = segments[index];
     const sample = await evaluate(track, segment.end, range, profile, samples, id);
     if (!sample) continue;
@@ -332,7 +276,7 @@ function refinementCandidate(samples, range) {
 async function optimizeGeneric(track, range, profile, samples, id, current) {
   const candidates = initialCandidates(range, current);
   for (const candidate of candidates) {
-    if (samples.length >= MAX_PROBES || id !== runId || track !== state.track) return null;
+    if (samples.length >= MAX_PROBES || id.aborted || track !== state.track) return null;
     const sample = await evaluate(track, candidate, range, profile, samples, id);
     if (!sample) continue;
     setControlStatus(
@@ -353,59 +297,32 @@ async function optimizeGeneric(track, range, profile, samples, id, current) {
   return bestSample(samples);
 }
 
-async function optimizeExposure() {
-  if (state.exposureDiagnosticRunning) {
-    setControlStatus("Probíhá diagnostika expozice; optimalizace je dočasně vypnutá.", true);
-    return;
-  }
-  if (!state.track || optimizing) return;
-  const range = exposureRange();
-  if (!range) {
-    setControlStatus("Kamera nezpřístupnila ruční expoziční čas.", true);
-    return;
-  }
-
-  optimizing = true;
-  const id = ++runId;
-  const track = state.track;
-  const samples = [];
-  const current = Number(track.getSettings().exposureTime) || range.min;
-  const profile = optimizerProfile();
-
-  setBusy(true);
-  busyTimer = window.setInterval(() => setBusy(true), 100);
-  if (state.darkSpectrum) clearDarkSpectrum();
-
+export async function optimizeExposure() {
   try {
-    const piecewise = profile.model === "piecewise-monotonic" && profile.period;
-    const best = piecewise
-      ? await optimizePiecewise(track, range, profile, samples, id)
-      : await optimizeGeneric(track, range, profile, samples, id, current);
-
-    if (id !== runId || track !== state.track) return;
-    if (!best) throw new Error("nepodařilo se získat platné měření");
-
-    setControlStatus(`Ověřuji expozici ${best.exposure} na nových snímcích…`);
-    const final = await evaluate(track, best.exposure, range, profile, samples, id, { force: true });
-    if (!final) throw new Error("nepodařilo se ověřit výslednou expozici");
-
-    const modelNote = piecewise
-      ? ` Použit model monotónních úseků s periodou ${profile.period}.`
-      : "";
-    setControlStatus(
-      `Expozice ${final.exposure} je uzamčena; maximum ${final.peak.toFixed(1)}/255.${modelNote}`,
-      final.peak > 245,
-    );
+    await cameraOperations.run("optimize", async ({signal:id}) => {
+      const track = state.track;
+      const range = exposureRange();
+      if (!track || !range) throw new Error("Kamera nezpřístupnila ruční expoziční čas.");
+      const samples = [];
+      const current = Number(track.getSettings().exposureTime) || range.min;
+      const profile = optimizerProfile();
+      setBusy(true);
+      if (state.darkSpectrum) clearDarkSpectrum();
+      try {
+        const piecewise = profile.model === "piecewise-monotonic" && profile.period;
+        const best = piecewise
+          ? await optimizePiecewise(track, range, profile, samples, id)
+          : await optimizeGeneric(track, range, profile, samples, id, current);
+        if (id.aborted || track !== state.track) return;
+        if (!best) throw new Error("nepodařilo se získat platné měření");
+        setControlStatus(`Ověřuji expozici ${best.exposure} na nových snímcích…`);
+        const final = await evaluate(track, best.exposure, range, profile, samples, id, {force:true});
+        if (!final || id.aborted || track !== state.track) return;
+        setControlStatus(`Expozice ${final.exposure} je uzamčena; maximum ${final.peak.toFixed(1)}/255.${piecewise ? ` Použit model monotónních úseků s periodou ${profile.period}.` : ""}`, final.peak > 245);
+      } finally { setBusy(false); }
+    });
   } catch (error) {
-    console.error(error);
-    setControlStatus(`Optimalizace expozice selhala: ${error.message}`, true);
-  } finally {
-    if (id === runId) optimizing = false;
-    window.clearInterval(busyTimer);
-    busyTimer = null;
-    setBusy(false);
-    const actual = Number(state.track?.getSettings().exposureTime);
-    if (Number.isFinite(actual)) syncExposureControls(actual);
+    if (error.name !== "AbortError") setControlStatus(`Optimalizace expozice selhala: ${error.message}`, true);
   }
 }
 
@@ -420,8 +337,5 @@ export function installExposureOptimizer() {
     optimizeExposure();
   }, { capture: true });
 
-  window.setInterval(() => {
-    const actual = Number(state.track?.getSettings().exposureTime);
-    if (Number.isFinite(actual)) syncExposureControls(actual);
-  }, 250);
+
 }

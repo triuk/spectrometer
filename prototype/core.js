@@ -1,3 +1,4 @@
+import {cameraOperations} from "./camera-operations.js";
 export const elements = {
   processingInterval: document.querySelector("#processingInterval"),
   startButton: document.querySelector("#startButton"),
@@ -99,8 +100,8 @@ export function setControlStatus(text, isError = false) {
 export function setRunningControls(running) {
   elements.startButton.disabled = running;
   elements.stopButton.disabled = !running;
-  elements.autoModeButton.disabled = !running;
-  elements.manualModeButton.disabled = !running;
+  elements.autoModeButton.disabled = !running || Boolean(cameraOperations.active);
+  elements.manualModeButton.disabled = !running || Boolean(cameraOperations.active);
   elements.captureDarkButton.disabled = !running || !state.averagedSpectrum;
   elements.exportCsvButton.disabled = !running || !state.averagedSpectrum;
   elements.saveFrameButton.disabled = !running;
