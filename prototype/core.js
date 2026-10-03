@@ -26,6 +26,8 @@ export const elements = {
   captureDarkButton: document.querySelector("#captureDarkButton"),
   clearDarkButton: document.querySelector("#clearDarkButton"),
   darkStatus: document.querySelector("#darkStatus"),
+  applyCalibrationButton: document.querySelector("#applyCalibrationButton"),
+  calibrationStatus: document.querySelector("#calibrationStatus"),
   pixel1: document.querySelector("#pixel1"),
   wavelength1: document.querySelector("#wavelength1"),
   pixel2: document.querySelector("#pixel2"),
@@ -59,6 +61,15 @@ export const state = {
   averagedSpectrum: null,
   darkSpectrum: null,
   controlApplySequence: 0,
+  session: 0,
+  starting: false,
+  measurementReady: false,
+  pendingRoi: null,
+  measurementKey: null,
+  measurementSnapshot: null,
+  darkKey: null,
+  calibrationCaptureMode: null,
+  calibrationEnabled: true,
 };
 
 export const overlayContext = elements.overlayCanvas.getContext("2d");
@@ -97,12 +108,16 @@ export function setControlStatus(text, isError = false) {
   elements.controlStatus.classList.toggle("control-error", isError);
 }
 
-export function setRunningControls(running) {
-  elements.startButton.disabled = running;
-  elements.stopButton.disabled = !running;
-  elements.autoModeButton.disabled = !running || Boolean(cameraOperations.active);
-  elements.manualModeButton.disabled = !running || Boolean(cameraOperations.active);
-  elements.captureDarkButton.disabled = !running || !state.averagedSpectrum;
-  elements.exportCsvButton.disabled = !running || !state.averagedSpectrum;
-  elements.saveFrameButton.disabled = !running;
+export function setRunningControls(running = Boolean(state.track)) {
+  const busy = Boolean(cameraOperations.active) || state.starting;
+  const measuring = running && state.measurementReady;
+  const hasData = measuring && Boolean(state.averagedSpectrum) && !busy && !state.dragStart;
+  elements.startButton.disabled = running || busy;
+  elements.stopButton.disabled = !running && !state.starting;
+  elements.autoModeButton.disabled = !measuring || busy || !state.capabilities.exposureTime;
+  elements.manualModeButton.disabled = !measuring || busy;
+  elements.captureDarkButton.disabled = !hasData;
+  elements.exportCsvButton.disabled = !hasData;
+  elements.saveFrameButton.disabled = !measuring || busy;
+  for (const input of elements.cameraControls.querySelectorAll("input, select")) input.disabled = !measuring || busy;
 }

@@ -63,3 +63,13 @@ test('32-unit exposure segments never cross a discontinuity, including non-unit 
     assert.equal(Math.floor(segment.start/32),Math.floor(segment.end/32));
   }
 });
+
+test('measurement identity changes with ROI, camera settings, mode, profile and session',async()=>{
+  const {measurementKey}=await import('../prototype/measurement-context.js');
+  const baseline={session:1,instrumentProfile:{id:'a'},cameraLabel:'USB-ZH',captureMode:{width:1920,height:1080},roi:{x:10,y:20,width:100,height:2},sensorOrientation:{flipX:true},cameraSettings:{exposureTime:100,colorTemperature:4600,frameRate:5}};
+  const original=measurementKey(baseline);
+  for(const mutate of [p=>p.session++,p=>p.roi.x++,p=>p.roi.width--,p=>p.cameraSettings.exposureTime++,p=>p.cameraSettings.colorTemperature++,p=>p.cameraSettings.brightness=1,p=>p.captureMode.width=1280,p=>p.instrumentProfile.id='b',p=>p.sensorOrientation.flipX=false]) {
+    const context=structuredClone(baseline);mutate(context);assert.notEqual(measurementKey(context),original);
+  }
+  const same=structuredClone(baseline);same.cameraSettings.unrelatedDiagnostic='foo';assert.equal(measurementKey(same),original);
+});

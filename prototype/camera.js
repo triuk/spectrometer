@@ -324,6 +324,7 @@ export async function startCamera() {
     renderCaptureMode(state.captureProfile);
     renderCameraControls();
     updateDiagnostics();
+    state.measurementReady = true;
     startProcessingLoop();
     observePreviewSize();
 
@@ -342,6 +343,8 @@ export async function startCamera() {
 
 export function stopCamera() {
   cameraOperations.cancel();
+  state.session += 1;
+  state.measurementReady = false;
   stopProcessing();
   state.resizeObserver?.disconnect();
   state.resizeObserver = null;

@@ -10,6 +10,8 @@ import { installUPlotSpectrum } from "./uplot-spectrum.js";
 import { installExposureDiagnostics } from "./exposure-diagnostics.js";
 import {
   beginRoiDrag,
+  cancelRoiDrag,
+  confirmCalibration,
   captureDarkSpectrum,
   clearDarkSpectrum,
   drawEmptyPlot,
@@ -35,8 +37,10 @@ function bindEvents() {
   elements.overlayCanvas.addEventListener("pointerdown", beginRoiDrag);
   elements.overlayCanvas.addEventListener("pointermove", updateRoiDrag);
   elements.overlayCanvas.addEventListener("pointerup", endRoiDrag);
-  elements.overlayCanvas.addEventListener("pointercancel", endRoiDrag);
+  elements.overlayCanvas.addEventListener("pointercancel", cancelRoiDrag);
   elements.overlayCanvas.addEventListener("dblclick", initialiseDefaultRoi);
+  elements.overlayCanvas.addEventListener("lostpointercapture", cancelRoiDrag);
+  elements.applyCalibrationButton.addEventListener("click", confirmCalibration);
 
   for (const input of [
     elements.showLuminance,

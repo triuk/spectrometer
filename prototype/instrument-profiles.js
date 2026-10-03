@@ -1,5 +1,5 @@
 import { clamp, elements, setControlStatus, state, toFiniteNumber } from "./core.js";
-import { clearDarkSpectrum, drawPlot } from "./spectrum.js";
+import { clearDarkSpectrum, drawPlot, setRoi, calibration } from "./spectrum.js";
 
 import { normaliseProfile, validateProfile } from "./profile-schema.js";
 
@@ -147,6 +147,8 @@ function refreshSelect() {
 }
 
 function applyCalibration(profile) {
+  state.calibrationCaptureMode = {...(profile.calibration.captureMode ?? profile.camera)};
+  state.calibrationEnabled = profile.calibration.valid !== false;
   const points = profile.calibration.points;
   const first = points[0];
   const second = points[1];
@@ -173,9 +175,7 @@ function applyRoi(profile) {
     ? width - spectralX - roiWidth
     : spectralX;
 
-  state.roi = { x: clamp(rawX, 0, width - roiWidth), y, width: roiWidth, height: roiHeight };
-  state.spectrumHistory = [];
-  state.averagedSpectrum = null;
+  setRoi({ x: clamp(rawX, 0, width - roiWidth), y, width: roiWidth, height: roiHeight });
   elements.roiOutput.textContent = `ROI: x ${spectralX}, y ${y}, ${roiWidth} × ${roiHeight}`;
 }
 
@@ -294,6 +294,8 @@ function buildCurrentProfile({ id, name }) {
     calibration: {
       model: "linear",
       points: currentCalibrationPoints(base),
+      captureMode: state.calibrationCaptureMode ?? {width:cameraWidth,height:cameraHeight},
+      valid: state.track ? Boolean(calibration()) : state.calibrationEnabled,
     },
     cameraSettings: {
       whiteBalance: Number(cameraSettings.colorTemperature) || Number(base.cameraSettings?.whiteBalance) || 4600,

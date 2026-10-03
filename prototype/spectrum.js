@@ -9,7 +9,12 @@ import {
   toFiniteNumber,
 } from "./core.js";
 
-const CHANNELS = ["red", "green", "blue", "luminance"];
+import {CHANNELS, rawToSpectralPixel, linearCalibration, extractSpectrum as extractPixels, averageSpectra, subtractSpectrum, calibrationMatchesMode, spectrumCsv} from "./spectrum-model.js";
+import {measurementKey} from "./measurement-context.js";
+import {cameraOperations} from "./camera-operations.js";
+import {waitForVideoFrame} from "./video-frames.js";
+import {publish} from "./events.js";
+let processingController = null;
 
 export function initialiseCaptureSurface() {
   elements.captureCanvas.width = elements.video.videoWidth;
@@ -22,10 +27,7 @@ export function initialiseDefaultRoi() {
   const width = elements.video.videoWidth;
   const height = elements.video.videoHeight;
   const roiHeight = Math.max(8, Math.round(height * 0.08));
-  state.roi = { x: 0, y: Math.round((height - roiHeight) / 2), width, height: roiHeight };
-  state.spectrumHistory = [];
-  state.averagedSpectrum = null;
-  if (state.darkSpectrum) clearDarkSpectrum();
+  setRoi({x:0, y:Math.round((height-roiHeight)/2), width, height:roiHeight});
   if (!state.instrumentProfile) {
     const first = spectralSensorPixel(0);
     const last = spectralSensorPixel(width - 1);
@@ -71,17 +73,18 @@ export function clearOverlay() {
 function drawOverlay() {
   clearOverlay();
   updatePreviewOrientation();
-  if (!state.roi || !elements.video.videoWidth) return;
+  const roi = state.pendingRoi ?? state.roi;
+  if (!roi || !elements.video.videoWidth) return;
   const shown = displayedVideoRect();
   const scaleX = shown.width / elements.video.videoWidth;
   const scaleY = shown.height / elements.video.videoHeight;
   const displayX = sensorXFlipped()
-    ? elements.video.videoWidth - state.roi.x - state.roi.width
-    : state.roi.x;
+    ? elements.video.videoWidth - roi.x - roi.width
+    : roi.x;
   const x = shown.x + displayX * scaleX;
-  const y = shown.y + state.roi.y * scaleY;
-  const width = state.roi.width * scaleX;
-  const height = state.roi.height * scaleY;
+  const y = shown.y + roi.y * scaleY;
+  const width = roi.width * scaleX;
+  const height = roi.height * scaleY;
   overlayContext.save();
   overlayContext.fillStyle = "rgba(83, 200, 255, 0.14)";
   overlayContext.strokeStyle = "rgba(83, 200, 255, 0.95)";
@@ -110,9 +113,11 @@ function pointerToVideo(event) {
 }
 
 export function beginRoiDrag(event) {
-  if (!state.track) return;
+  if (!state.measurementReady || cameraOperations.active) return;
   elements.overlayCanvas.setPointerCapture(event.pointerId);
   state.dragStart = pointerToVideo(event);
+  state.pendingRoi = {...state.roi};
+  setRunningControls();
 }
 
 export function updateRoiDrag(event) {
@@ -120,7 +125,7 @@ export function updateRoiDrag(event) {
   const point = pointerToVideo(event);
   const x = Math.min(state.dragStart.x, point.x);
   const y = Math.min(state.dragStart.y, point.y);
-  state.roi = normaliseRoi({
+  state.pendingRoi = normaliseRoi({
     x,
     y,
     width: Math.abs(point.x - state.dragStart.x) + 1,
@@ -133,10 +138,20 @@ export function updateRoiDrag(event) {
 export function endRoiDrag(event) {
   if (!state.dragStart) return;
   updateRoiDrag(event);
+  const roi = state.pendingRoi;
   state.dragStart = null;
-  state.spectrumHistory = [];
-  state.averagedSpectrum = null;
-  if (state.darkSpectrum) clearDarkSpectrum();
+  state.pendingRoi = null;
+  setRoi(roi);
+}
+export function cancelRoiDrag() {
+  state.dragStart = null;
+  state.pendingRoi = null;
+  updateRoiOutput(); drawOverlay(); setRunningControls();
+}
+export function setRoi(roi) {
+  state.roi = normaliseRoi(roi);
+  invalidateMeasurement("ROI byla změněna.");
+  updateRoiOutput(); drawOverlay();
 }
 
 function normaliseRoi(roi) {
@@ -153,112 +168,120 @@ function normaliseRoi(roi) {
 }
 
 function updateRoiOutput() {
-  if (!state.roi) return;
-  const displayX = sensorXFlipped() && sensorWidth() > 0
-    ? sensorWidth() - state.roi.x - state.roi.width
-    : state.roi.x;
-  elements.roiOutput.textContent = `ROI: x ${displayX}, y ${state.roi.y}, ${state.roi.width} × ${state.roi.height}`;
+  const roi = state.pendingRoi ?? state.roi;
+  if (!roi) return;
+  const displayX = sensorXFlipped() && sensorWidth() > 0 ? sensorWidth()-roi.x-roi.width : roi.x;
+  elements.roiOutput.textContent = `ROI: x ${displayX}, y ${roi.y}, ${roi.width} × ${roi.height}`;
 }
 
 export function stopProcessing() {
-  if (state.processingTimer !== null) window.clearTimeout(state.processingTimer);
-  state.processingTimer = null;
+  processingController?.abort(); processingController = null;
 }
-
 export function clearProcessingState() {
   state.spectrumHistory = [];
   state.averagedSpectrum = null;
+  state.measurementKey = null;
+  state.measurementSnapshot = null;
   elements.peakOutput.textContent = "Maximum: –";
-  drawEmptyPlot();
+  drawPlot(); setRunningControls();
 }
-
-export function startProcessingLoop() {
-  const run = () => {
-    processFrame();
-    const delay = clamp(toFiniteNumber(elements.processingInterval.value, 200), 50, 5000);
-    state.processingTimer = window.setTimeout(run, delay);
+export function invalidateMeasurement(reason = "Podmínky měření byly změněny.") {
+  clearProcessingState();
+  if (state.darkSpectrum) clearDarkSpectrum();
+  publish("measurement-invalidated",reason);
+}
+export function captureConditions() {
+  return {
+    session:state.session,
+    instrumentProfile:state.instrumentProfile ? {id:state.instrumentProfile.id,name:state.instrumentProfile.name} : null,
+    cameraLabel:state.track?.label ?? "",
+    cameraSettings:{...state.track?.getSettings()},
+    captureMode:{width:elements.video.videoWidth,height:elements.video.videoHeight},
+    roi:state.roi ? {...state.roi} : null,
+    sensorOrientation:{flipX:sensorXFlipped()},
   };
-  run();
 }
-
-function processFrame() {
-  if (!state.track || !state.roi || elements.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-  const started = performance.now();
-  captureContext.drawImage(elements.video, 0, 0, elements.captureCanvas.width, elements.captureCanvas.height);
-  state.spectrumHistory.push(extractSpectrum(state.roi));
-  trimSpectrumHistory();
-  state.averagedSpectrum = averageHistory();
-  drawPlot();
-  const settings = state.track.getSettings();
-  elements.frameStatus.textContent = `${settings.width ?? elements.video.videoWidth} × ${settings.height ?? elements.video.videoHeight} · ${settings.frameRate ?? "?"} fps · výpočet ${(performance.now() - started).toFixed(1)} ms`;
-  setRunningControls(true);
+export function hasValidMeasurement() {
+  if (!state.measurementReady || cameraOperations.active || state.dragStart || !state.averagedSpectrum || !state.roi) return false;
+  if (measurementKey(captureConditions()) !== state.measurementKey) {
+    invalidateMeasurement(); return false;
+  }
+  return true;
 }
-
-function extractSpectrum(roi) {
-  const image = captureContext.getImageData(roi.x, roi.y, roi.width, roi.height);
-  const result = Object.fromEntries(CHANNELS.map((name) => [name, new Float32Array(roi.width)]));
-  for (let y = 0; y < roi.height; y += 1) {
-    for (let x = 0; x < roi.width; x += 1) {
-      const offset = (y * roi.width + x) * 4;
-      const r = image.data[offset];
-      const g = image.data[offset + 1];
-      const b = image.data[offset + 2];
-      result.red[x] += r;
-      result.green[x] += g;
-      result.blue[x] += b;
-      result.luminance[x] += 0.299 * r + 0.587 * g + 0.114 * b;
+export function startProcessingLoop() {
+  stopProcessing();
+  const controller = new AbortController();
+  processingController = controller;
+  const track = state.track;
+  const run = async () => {
+    let lastComputed = -Infinity, lastMediaTime = null;
+    try {
+      while (!controller.signal.aborted && track === state.track) {
+        const frame = await waitForVideoFrame(elements.video,{signal:controller.signal,track});
+        if (controller.signal.aborted || track !== state.track) break;
+        const mediaTime = frame.metadata.mediaTime;
+        if (mediaTime !== undefined && mediaTime === lastMediaTime) continue;
+        lastMediaTime = mediaTime;
+        const delay = clamp(toFiniteNumber(elements.processingInterval.value,200),50,5000);
+        if (frame.now-lastComputed < delay) continue;
+        if (processFrame(frame)) lastComputed = frame.now;
+      }
+    } catch (error) {
+      if (error.name !== "AbortError" && track === state.track) {
+        state.measurementReady = false;
+        invalidateMeasurement(error.message);
+        publish("capture-error",error);
+      }
     }
-  }
-  for (const values of Object.values(result)) {
-    for (let x = 0; x < values.length; x += 1) values[x] /= roi.height;
-  }
-  return result;
+  };
+  void run();
 }
-
-export function trimSpectrumHistory() {
-  const target = clamp(Math.round(toFiniteNumber(elements.averageFrames.value, 8)), 1, 64);
+function processFrame(frame) {
+  if (!state.measurementReady || cameraOperations.active || state.dragStart || !state.roi
+      || elements.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
+  const started = performance.now();
+  const context = captureConditions();
+  const key = measurementKey(context);
+  if (key !== state.measurementKey) invalidateMeasurement();
+  captureContext.drawImage(elements.video,0,0,elements.captureCanvas.width,elements.captureCanvas.height);
+  const image = captureContext.getImageData(state.roi.x,state.roi.y,state.roi.width,state.roi.height);
+  state.spectrumHistory.push(extractPixels(image.data,state.roi.width,state.roi.height));
+  trimSpectrumHistory(false);
+  state.averagedSpectrum = averageSpectra(state.spectrumHistory);
+  state.measurementKey = key;
+  state.measurementSnapshot = {...context,averagedFrames:state.spectrumHistory.length,capturedAt:new Date().toISOString(),mediaTime:frame.metadata.mediaTime};
+  drawPlot();
+  const settings = context.cameraSettings;
+  elements.frameStatus.textContent = `${context.captureMode.width} × ${context.captureMode.height} · ${settings.frameRate ?? "?"} fps · výpočet ${(performance.now()-started).toFixed(1)} ms`;
+  setRunningControls();
+  return true;
+}
+export function trimSpectrumHistory(recompute = true) {
+  const target = clamp(Math.round(toFiniteNumber(elements.averageFrames.value,8)),1,64);
   elements.averageFrames.value = String(target);
   while (state.spectrumHistory.length > target) state.spectrumHistory.shift();
-}
-
-function averageHistory() {
-  if (!state.spectrumHistory.length) return null;
-  const width = state.spectrumHistory[0].luminance.length;
-  const result = Object.fromEntries(CHANNELS.map((name) => [name, new Float32Array(width)]));
-  for (const spectrum of state.spectrumHistory) {
-    for (const name of CHANNELS) {
-      for (let x = 0; x < width; x += 1) result[name][x] += spectrum[name][x];
-    }
+  if (recompute && state.spectrumHistory.length) {
+    state.averagedSpectrum = averageSpectra(state.spectrumHistory);
+    if (state.measurementSnapshot) state.measurementSnapshot.averagedFrames = state.spectrumHistory.length;
+    drawPlot();
   }
-  for (const values of Object.values(result)) {
-    for (let x = 0; x < width; x += 1) values[x] /= state.spectrumHistory.length;
-  }
-  return result;
 }
-
-function processedSpectrum() {
-  if (!state.averagedSpectrum) return null;
-  const subtract = elements.subtractDark.checked
-    && state.darkSpectrum
-    && state.darkSpectrum.luminance.length === state.averagedSpectrum.luminance.length;
-  if (!subtract) return state.averagedSpectrum;
-  const result = {};
-  for (const name of CHANNELS) {
-    result[name] = Float32Array.from(state.averagedSpectrum[name], (value, index) => Math.max(0, value - state.darkSpectrum[name][index]));
-  }
-  return result;
+export function darkSubtractionActive() {
+  return Boolean(elements.subtractDark.checked && state.darkSpectrum && state.darkKey === state.measurementKey);
 }
-
+export function processedSpectrum() {
+  return darkSubtractionActive() ? subtractSpectrum(state.averagedSpectrum,state.darkSpectrum) : state.averagedSpectrum;
+}
 export function captureDarkSpectrum() {
-  if (!state.averagedSpectrum) return;
-  state.darkSpectrum = Object.fromEntries(CHANNELS.map((name) => [name, new Float32Array(state.averagedSpectrum[name])]));
+  if (!hasValidMeasurement()) return;
+  state.darkSpectrum = Object.fromEntries(CHANNELS.map(name=>[name,new Float32Array(state.averagedSpectrum[name])]));
+  state.darkKey = state.measurementKey;
   elements.clearDarkButton.disabled = false;
   elements.darkStatus.textContent = `Tmavé spektrum zachyceno z ${state.spectrumHistory.length} snímků.`;
   drawPlot();
 }
-
 export function clearDarkSpectrum() {
-  state.darkSpectrum = null;
+  state.darkSpectrum = null; state.darkKey = null;
   elements.clearDarkButton.disabled = true;
   elements.darkStatus.textContent = "Tmavé spektrum není zachyceno.";
   drawPlot();
@@ -286,25 +309,43 @@ export function rawSensorPixel(roiPixel) {
 export function spectralSensorPixel(roiPixel) {
   const raw = rawSensorPixel(roiPixel);
   const width = sensorWidth();
-  return sensorXFlipped() && width > 0 ? width - 1 - raw : raw;
+  return rawToSpectralPixel(raw,width,sensorXFlipped() && width>0);
 }
 
-function calibration() {
-  const p1 = toFiniteNumber(elements.pixel1.value, 0);
-  const p2 = toFiniteNumber(elements.pixel2.value, 1);
-  const w1 = toFiniteNumber(elements.wavelength1.value, 400);
-  const w2 = toFiniteNumber(elements.wavelength2.value, 700);
-  if (p1 === p2) return null;
-  const slope = (w2 - w1) / (p2 - p1);
-  return {
-    coordinateSystem: sensorXFlipped() ? "sensor-x-flipped" : "sensor",
-    pixel1: p1,
-    pixel2: p2,
-    wavelength1: w1,
-    wavelength2: w2,
-    slope,
-    intercept: w1 - slope * p1,
-  };
+export function calibrationPoints() {
+  return [
+    {pixel:Number(elements.pixel1.value),wavelengthNm:Number(elements.wavelength1.value)},
+    {pixel:Number(elements.pixel2.value),wavelengthNm:Number(elements.wavelength2.value)},
+  ];
+}
+export function calibration() {
+  const points = calibrationPoints();
+  const width = elements.video.videoWidth || state.calibrationCaptureMode?.width;
+  const height = elements.video.videoHeight || state.calibrationCaptureMode?.height;
+  if (!state.calibrationEnabled || !calibrationMatchesMode({captureMode:state.calibrationCaptureMode},width,height)
+      || [elements.pixel1,elements.pixel2,elements.wavelength1,elements.wavelength2].some(input=>input.value.trim()==="")
+      || points.some(point=>point.pixel<0 || point.pixel>width-1)) return null;
+  const result = linearCalibration(points);
+  return result ? {...result,coordinateSystem:sensorXFlipped()?"sensor-x-flipped":"sensor",
+    pixel1:points[0].pixel,pixel2:points[1].pixel,wavelength1:points[0].wavelengthNm,wavelength2:points[1].wavelengthNm,
+    captureMode:{width,height}} : null;
+}
+export function confirmCalibration() {
+  const width = elements.video.videoWidth || state.instrumentProfile?.camera.width;
+  const height = elements.video.videoHeight || state.instrumentProfile?.camera.height;
+  const points = calibrationPoints();
+  if (!linearCalibration(points) || points.some(point=>point.pixel<0 || point.pixel>width-1)) {
+    elements.calibrationStatus.textContent = "Zadejte dva platné odlišné body uvnitř aktuálního senzoru.";
+    return;
+  }
+  state.calibrationCaptureMode = {width,height}; state.calibrationEnabled = true;
+  drawPlot();
+}
+function updateCalibrationStatus() {
+  const current = calibration();
+  elements.calibrationStatus.textContent = current
+    ? `Kalibrace aktivní pro ${current.captureMode.width} × ${current.captureMode.height}.`
+    : "Kalibrace není platná pro tento režim. Graf používá pixely; zadejte body a potvrďte kalibraci.";
 }
 
 function wavelength(roiPixel) {
@@ -342,6 +383,7 @@ export function drawEmptyPlot() {
 }
 
 export function drawPlot() {
+  updateCalibrationStatus();
   const spectrum = processedSpectrum();
   if (!spectrum) return drawEmptyPlot();
   resizePlot();
@@ -429,34 +471,11 @@ export function useRoiWidthForCalibration() {
 }
 
 export function exportCsv() {
+  if (!hasValidMeasurement()) return;
   const spectrum = processedSpectrum();
-  if (!spectrum || !state.roi) return;
-  const metadata = {
-    exportedAt: new Date().toISOString(),
-    instrumentProfile: state.instrumentProfile ? { id: state.instrumentProfile.id, name: state.instrumentProfile.name } : null,
-    cameraLabel: state.track?.label ?? "",
-    cameraSettings: state.track?.getSettings() ?? {},
-    roi: state.roi,
-    sensorOrientation: { flipX: sensorXFlipped() },
-    averagedFrames: state.spectrumHistory.length,
-    darkSubtraction: Boolean(elements.subtractDark.checked && state.darkSpectrum),
-    calibration: calibration(),
-  };
-  const lines = [`# metadata=${JSON.stringify(metadata)}`, "roi_pixel,sensor_pixel,raw_sensor_pixel,wavelength_nm,red,green,blue,luminance"];
-  const count = spectrum.luminance.length;
-  const sensorOrderReversed = count > 1 && spectralSensorPixel(0) > spectralSensorPixel(count - 1);
-  for (let outputIndex = 0; outputIndex < count; outputIndex += 1) {
-    const sourceIndex = sensorOrderReversed ? count - 1 - outputIndex : outputIndex;
-    const nm = wavelength(sourceIndex);
-    lines.push([
-      outputIndex,
-      spectralSensorPixel(sourceIndex),
-      rawSensorPixel(sourceIndex),
-      nm === null ? "" : nm.toFixed(6),
-      ...CHANNELS.map((name) => spectrum[name][sourceIndex].toFixed(6)),
-    ].join(","));
-  }
-  download(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }), `spectrum-${timestamp()}.csv`);
+  const metadata = {...state.measurementSnapshot,exportedAt:new Date().toISOString(),
+    darkSubtraction:darkSubtractionActive(),calibration:calibration()};
+  download(new Blob([spectrumCsv(spectrum,metadata)],{type:"text/csv;charset=utf-8"}),`spectrum-${timestamp()}.csv`);
 }
 
 export function saveFrame() {

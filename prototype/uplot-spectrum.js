@@ -1,5 +1,5 @@
 import { elements, state, toFiniteNumber } from "./core.js";
-import { spectralSensorPixel } from "./spectrum.js";
+import { spectralSensorPixel, calibration, processedSpectrum } from "./spectrum.js";
 
 const UPLOT_VERSION = "1.6.32";
 const UPLOT_JS = `https://cdn.jsdelivr.net/npm/uplot@${UPLOT_VERSION}/dist/uPlot.iife.min.js`;
@@ -182,33 +182,6 @@ function fallbackToCanvas(error) {
   console.error(error);
   if (host) host.style.display = "none";
   if (fallbackCanvas) fallbackCanvas.style.display = "block";
-}
-
-function calibration() {
-  const p1 = toFiniteNumber(elements.pixel1.value, 0);
-  const p2 = toFiniteNumber(elements.pixel2.value, 1);
-  const w1 = toFiniteNumber(elements.wavelength1.value, 400);
-  const w2 = toFiniteNumber(elements.wavelength2.value, 700);
-  if (p1 === p2) return null;
-  const slope = (w2 - w1) / (p2 - p1);
-  return { slope, intercept: w1 - slope * p1 };
-}
-
-function processedSpectrum() {
-  if (!state.averagedSpectrum) return null;
-  const subtract = elements.subtractDark.checked
-    && state.darkSpectrum
-    && state.darkSpectrum.luminance.length === state.averagedSpectrum.luminance.length;
-  if (!subtract) return state.averagedSpectrum;
-
-  const result = {};
-  for (const name of CHANNELS) {
-    result[name] = Float32Array.from(
-      state.averagedSpectrum[name],
-      (value, index) => Math.max(0, value - state.darkSpectrum[name][index]),
-    );
-  }
-  return result;
 }
 
 function seriesVisibility() {
@@ -817,6 +790,9 @@ function refreshNeeded() {
     state.roi?.x,
     state.roi?.width,
     state.instrumentProfile?.sensorOrientation?.flipX,
+    state.calibrationEnabled,
+    state.calibrationCaptureMode?.width,
+    state.calibrationCaptureMode?.height,
     elements.subtractDark.checked,
     elements.showLuminance.checked,
     elements.showRed.checked,
