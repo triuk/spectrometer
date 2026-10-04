@@ -43,7 +43,7 @@ Rozsah: osm bodů schváleného code review. Referenční zdroje, AGENTS a deplo
 
 Všech osm bodů bylo provedeno. uPlot stejné verze je nově přibalený s licencí, aby graf i testy fungovaly bez CDN. Integrační ověření zahrnuje reálný Canvas a uPlot, simulované snímky/tracky a import/export. Opraveny byly také regresním testem zachycené nulové hodnoty při exportu zastaveného profilu, nepřijetí constraints a orientace při sestupné kalibraci.
 
-Ověření po dodatečné kontrole: 15 Node testů, 24 browser kontrol, syntaxe modulů, čistý diff. USB-ZH není dostupný; praktická kontrola zůstává uvedená v HANDOFF.md. Změny jsou pouze lokální commity; push a deployment zatím neproběhly.
+Ověření po dodatečné kontrole: 15 Node testů, 24 browser kontrol, syntaxe modulů, čistý diff. USB-ZH není dostupný; praktická kontrola zůstává uvedená v HANDOFF.md. Na následnou výslovnou žádost uživatele byly změny pushnuty a nasazeny přes stávající GitHub mirror a GitLab Pages; implementační commit `5fd54a7` a odkazy na úspěšné pipeline jsou zaznamenané v HANDOFF.md.
 
 ## Dodatečná kontrola před push a deploymentem
 

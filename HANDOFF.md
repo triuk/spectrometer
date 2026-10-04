@@ -14,6 +14,18 @@ Tento soubor je určený pro další ChatGPT/Codex vlákno, které má pokračov
   - `.github/workflows/mirror-to-gitlab.yml`
   - `.gitlab-ci.yml`
 
+## Poslední nasazení
+
+Uživatel 4. října 2026 výslovně požádal o push a deploy po dodatečné kontrole kódu.
+
+- Implementační commit: `5fd54a738a8416753722a94eaa6a39f0d543801b` na `agent/web-spectrometer-prototype`, pushnutý do `triuk/spectrometer`.
+- [GitHub mirror](https://github.com/triuk/spectrometer/actions/runs/37192029704) uspěl a GitLab větev obsahuje stejné SHA.
+- [GitLab Pages pipeline](https://gitlab.com/lab-devices/spectrometer/-/pipelines/2910603350) i `deploy-pages` uspěly pro toto SHA.
+- Živá aplikace: https://spectrometer-f57060.gitlab.io/ (standardní https://lab-devices.gitlab.io/spectrometer/ na ni přesměruje).
+- Všech 28 zveřejněných souborů prototypu odpovídá ověřenému commitu. Čisté headless Chromium načetlo výchozí profil i uPlot bez JS či HTTP chyb a bez spuštění kamery. Kamera USB-ZH nebyla při nasazení dostupná; praktické HW ověření níže zůstává neprovedené.
+
+Push používá stávající SSH přístup do stejného GitHub repozitáře. HTTPS CLI přihlášení v této relaci není dostupné; konfigurace originu nebyla trvale změněna.
+
 ## Cíl
 
 Čistě webová aplikace HTML/CSS/JS pro ovládání a měření s kamerovým Little Garden Spectrometerem v Chromiu. Inspirace a referenční implementace jsou popsány v `AGENTS.md`.
