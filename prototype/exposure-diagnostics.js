@@ -288,8 +288,8 @@ function summaryText(result) {
 
 function syncUiRunning() {
   if (!ui) return;
-  ui.start.disabled = running || !state.measurementReady || Boolean(cameraOperations.active);
-  ui.stop.disabled = !running;
+  ui.start.disabled = running || !state.measurementReady || Boolean(cameraOperations.active) || Boolean(state.dragStart);
+  ui.stop.disabled = !running || stopRequested;
   ui.step.disabled = running;
   ui.maxFrames.disabled = running;
   ui.mode.disabled = running;
@@ -307,12 +307,17 @@ function setExposureInputsDisabled(disabled) {
 
 async function restoreExposure(track, exposure, range) {
   if (!track || track !== state.track || !Number.isFinite(exposure)) return;
+  // Diagnostic Stop cancels the sweep, but restoration must still run.
+  // Camera Stop/disconnection cancels this separate restoration lifetime.
+  const controller = new AbortController();
+  const cancelIfStopped = () => {if (track !== state.track) controller.abort();};
+  events.addEventListener("camera-state",cancelIfStopped);
   try {
-    await applyImageConstraints(track, {exposureMode:"manual", exposureTime:quantize(exposure,range)});
-    await settleCamera(track);
+    await applyImageConstraints(track, {exposureMode:"manual", exposureTime:quantize(exposure,range)},controller.signal);
+    await settleCamera(track,controller.signal);
   } catch (error) {
-    console.warn("Exposure could not be restored after diagnostics.", error);
-  }
+    if (error.name !== "AbortError") console.warn("Exposure could not be restored after diagnostics.", error);
+  } finally {events.removeEventListener("camera-state",cancelIfStopped);}
 }
 
 async function runDiagnosticSweep(signal) {
@@ -399,6 +404,7 @@ async function runDiagnosticSweep(signal) {
     };
     lastResult = result;
     ui.summary.textContent = summaryText(result);
+    ui.summary.hidden = false;
     ui.status.textContent = stopRequested
       ? `Diagnostika zastavena; uloženo ${points.length} bodů.`
       : `Diagnostika dokončena; uloženo ${points.length} bodů.`;
@@ -416,6 +422,7 @@ async function runDiagnosticSweep(signal) {
 }
 
 export async function runDiagnostics() {
+  if (state.dragStart) {ui.status.textContent = "Dokončete výběr ROI před diagnostikou."; return;}
   try { await cameraOperations.run("diagnostics", ({signal}) => runDiagnosticSweep(signal)); }
   catch (error) { if (error.name !== "AbortError") ui.status.textContent = error.message; }
 }
@@ -527,10 +534,11 @@ function createUi() {
     stopRequested = true;
     if (cameraOperations.active?.kind === "diagnostics") cameraOperations.cancel();
     ui.status.textContent = "Zastavuji a obnovuji expozici…";
+    syncUiRunning();
   });
   ui.exportJson.addEventListener("click", exportJson);
   ui.exportCsv.addEventListener("click", exportCsv);
-  for (const type of ["camera-operation","camera-state"]) events.addEventListener(type,syncUiRunning);
+  for (const type of ["camera-operation","camera-state","spectrum-change"]) events.addEventListener(type,syncUiRunning);
   syncUiRunning();
 }
 

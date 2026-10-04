@@ -1,25 +1,32 @@
 const config=window.parent.testConfig??{};
+if(config.fastCameraTimeouts){const timeout=window.setTimeout.bind(window);window.setTimeout=(callback,delay,...args)=>timeout(callback,[5000,30000].includes(delay)?40:delay,...args);}
 const video=document.querySelector('#video');
 let stream=null, frame=0, permissionGranted=false;
 const callbacks=new Map();let callbackId=0;
 class Track extends EventTarget {
   constructor(label,id){super();this.label=label;this.readyState='live';this.settings={deviceId:id,width:1920,height:1080,frameRate:5,exposureMode:'continuous',whiteBalanceMode:'continuous',exposureTime:100,colorTemperature:4600,brightness:0,contrast:32,saturation:50,sharpness:1};this.applied=[];}
   getSettings(){return {...this.settings};}
-  getCapabilities(){return {exposureMode:['manual','continuous'],whiteBalanceMode:['manual','continuous'],exposureTime:{min:1,max:10000,step:1},colorTemperature:{min:2800,max:6500,step:1},brightness:{min:-64,max:64,step:1},contrast:{min:0,max:64,step:1},saturation:{min:0,max:100,step:1},sharpness:{min:0,max:10,step:1}};}
+  getCapabilities(){const caps={exposureMode:['manual','continuous'],whiteBalanceMode:['manual','continuous'],exposureTime:{min:1,max:10000,step:1},colorTemperature:{min:2800,max:6500,step:1},brightness:{min:-64,max:64,step:1},contrast:{min:0,max:64,step:1},saturation:{min:0,max:100,step:1},sharpness:{min:0,max:10,step:1}};if(config.hiddenModes){delete caps.exposureMode;delete caps.whiteBalanceMode;}return caps;}
   async applyConstraints(constraints){
     this.applied.push(structuredClone(constraints));
+    this.pendingConstraints=(this.pendingConstraints??0)+1;
+    this.maxPendingConstraints=Math.max(this.maxPendingConstraints??0,this.pendingConstraints);
+    try {
+    const delay=constraints.advanced ? window.fakeConstraintDelays?.[constraints.advanced[0].exposureTime]??window.delayFakeConstraintsMs : config.formatDelay;
+    if(delay)await new Promise(resolve=>setTimeout(resolve,delay));
     if(this.readyState==='ended')throw new DOMException('Track ended','InvalidStateError');
     if(constraints.advanced){if(!window.ignoreFakeConstraints)Object.assign(this.settings,constraints.advanced[0]);return;}
     if(config.fallback && constraints.width?.exact===1920)throw new DOMException('Fallback mode','OverconstrainedError');
     this.settings.width=config.fallback?1280:constraints.width?.exact??constraints.width?.ideal??this.settings.width;
     this.settings.height=config.fallback?720:constraints.height?.exact??constraints.height?.ideal??this.settings.height;
     this.settings.frameRate=constraints.frameRate?.exact??constraints.frameRate?.ideal??5;
+    } finally {this.pendingConstraints--;}
   }
   stop(){this.readyState='ended';}
 }
 window.fakeTracks=[];window.fakeRequests=[];
 Object.defineProperty(navigator,'mediaDevices',{value:{
-  enumerateDevices:async()=>[{kind:'videoinput',deviceId:'hp',label:config.hiddenLabels && !permissionGranted?'':'HP Camera'},{kind:'videoinput',deviceId:'usb-new',label:config.hiddenLabels && !permissionGranted?'':'USB 2.0 Camera: USB-ZH'}],
+  enumerateDevices:async()=>{if(config.enumerationDelay)await new Promise(resolve=>setTimeout(resolve,config.enumerationDelay));return [{kind:'videoinput',deviceId:'hp',label:config.hiddenLabels && !permissionGranted?'':'HP Camera'},{kind:'videoinput',deviceId:'usb-new',label:config.hiddenLabels && !permissionGranted?'':'USB 2.0 Camera: USB-ZH'}];},
   getUserMedia:async constraints=>{
     window.fakeRequests.push(structuredClone(constraints));
     const id=constraints.video?.deviceId?.exact;

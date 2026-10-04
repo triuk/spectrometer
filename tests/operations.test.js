@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createOperationController,abortable} from '../prototype/camera-operations.js';
+import {createOperationController,abortable,acquireMediaStream} from '../prototype/camera-operations.js';
 import {waitForVideoFrame} from '../prototype/video-frames.js';
 const fakeVideo = () => Object.assign(new EventTarget(),{currentTime:0,readyState:2,callbacks:new Map(),
   requestVideoFrameCallback(callback) {this.callbacks.set(1,callback); return 1;},
@@ -40,4 +40,25 @@ test('abortable camera request observes abort and timeout',async()=>{
   const controller=new AbortController();const waiting=abortable(new Promise(()=>{}),controller.signal);
   controller.abort();await assert.rejects(waiting,{name:'AbortError'});
   await assert.rejects(abortable(new Promise(()=>{}),undefined,10),/časovém limitu/);
+});
+test('timed-out media acquisition closes a late stream even when its caller recovers',async()=>{
+  const controller=new AbortController();
+  let deliver,stopped=false;
+  const stream={getTracks:()=>[{stop(){stopped=true;}}]};
+  const waiting=acquireMediaStream(()=>new Promise(resolve=>deliver=resolve),{signal:controller.signal,timeoutMs:10});
+  await assert.rejects(waiting,{name:'TimeoutError'});
+  assert.equal(controller.signal.aborted,false);
+  deliver(stream);
+  await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(stopped,true);
+});
+test('cancelled media acquisition never starts another permission request',async()=>{
+  const controller=new AbortController();controller.abort();let requested=false;
+  await assert.rejects(acquireMediaStream(()=>{requested=true;},{signal:controller.signal}),{name:'AbortError'});
+  assert.equal(requested,false);
+});
+test('aborted waits still consume rejection from an already-created native request',async()=>{
+  const controller=new AbortController();controller.abort();
+  await assert.rejects(abortable(Promise.reject(Error('late native failure')),controller.signal),{name:'AbortError'});
+  await new Promise(resolve=>setTimeout(resolve,0));
 });

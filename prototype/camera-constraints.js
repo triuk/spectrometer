@@ -26,8 +26,12 @@ export async function applyImageConstraints(track, values, signal) {
     clearProcessingState();
     if (state.darkSpectrum) clearDarkSpectrum();
   }
+  let applying = false;
   try {
-    await abortable(track.applyConstraints({advanced:[values]}),signal);
+    const request = track.applyConstraints({advanced:[values]});
+    applying = true;
+    const pending = Promise.resolve(request).finally(() => {applying = false;});
+    await abortable(pending,signal);
     if (track !== state.track || signal?.aborted) throw abortError();
     const settings = track.getSettings();
     for (const [key,value] of Object.entries(values)) {
@@ -40,7 +44,14 @@ export async function applyImageConstraints(track, values, signal) {
     publish('camera-settings',settings);
     return settings;
   } catch (error) {
-    if (error.name !== 'AbortError' && track === state.track) publish('capture-error',error);
+    if (track === state.track) {
+      if (error.name !== 'AbortError') publish('capture-error',error);
+      else if (applying) {
+        // applyConstraints has no native cancellation. Closing the track
+        // prevents its late completion from overwriting restored settings.
+        publish('capture-error',new Error('Změna nastavení kamery byla přerušena. Spusťte kameru znovu.'));
+      }
+    }
     throw error;
   }
 }
@@ -76,5 +87,11 @@ export async function configureMeasurementCamera(profile, signal) {
   const range = measurementExposureRange();
   if (range) values.exposureTime = quantize(state.track.getSettings().exposureTime ?? range.min,range);
   if (!Object.keys(values).length) throw new Error('Kamera neposkytuje ruční nastavení obrazu.');
-  return applyImageConstraints(state.track,values,signal);
+  const actual = await applyImageConstraints(state.track,values,signal);
+  for (const name of ['exposureMode','whiteBalanceMode']) {
+    if (actual[name] !== undefined && actual[name] !== 'manual') {
+      throw new Error(`Kamera hlásí ${name}=${actual[name]}; měření vyžaduje ruční režim.`);
+    }
+  }
+  return actual;
 }

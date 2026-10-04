@@ -245,7 +245,8 @@ function processFrame(frame) {
   const started = performance.now();
   const context = captureConditions();
   for (const name of ["exposureMode","whiteBalanceMode"]) {
-    if (state.capabilities[name]?.includes("manual") && context.cameraSettings[name] !== "manual") {
+    const mode = context.cameraSettings[name];
+    if ((mode !== undefined || state.capabilities[name]?.includes("manual")) && mode !== "manual") {
       publish("capture-error",new Error(`Kamera opustila ruční ${name}. Spusťte ji znovu.`)); return false;
     }
   }

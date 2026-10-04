@@ -1,4 +1,4 @@
-import {cameraOperations, abortable, abortError} from "./camera-operations.js";
+import {cameraOperations, abortable, abortError, acquireMediaStream} from "./camera-operations.js";
 import {applyImageConstraints, measurementExposureRange, quantize, settleCamera} from "./camera-constraints.js";
 import {applyInstrumentProfile} from "./instrument-profiles.js";
 import {publish} from "./events.js";
@@ -151,11 +151,7 @@ async function waitForMetadata(signal) {
   } finally { elements.video.removeEventListener("loadedmetadata",listener); }
 }
 async function openMediaStream(constraints,signal) {
-  const request = navigator.mediaDevices.getUserMedia(constraints).then(stream => {
-    if (signal?.aborted) {stopStream(stream); throw abortError();}
-    return stream;
-  });
-  return abortable(request,signal,30000);
+  return acquireMediaStream(() => navigator.mediaDevices.getUserMedia(constraints),{signal});
 }
 
 function stopStream(stream) {
@@ -169,16 +165,16 @@ async function openCameraDevice(deviceId,signal) {
   },signal);
 }
 
-async function videoInputs() {
+async function videoInputs(signal) {
   if (!navigator.mediaDevices?.enumerateDevices) return [];
-  const devices = await navigator.mediaDevices.enumerateDevices();
+  const devices = await abortable(navigator.mediaDevices.enumerateDevices(),signal);
   return devices.filter((device) => device.kind === "videoinput");
 }
 
-async function findProfileVideoInput() {
+async function findProfileVideoInput(signal) {
   const expected = desiredCamera().labelContains.trim();
   if (!expected) return null;
-  const devices = await videoInputs();
+  const devices = await videoInputs(signal);
   return devices.find((device) => device.deviceId && labelMatchesProfile(device.label)) ?? null;
 }
 
@@ -206,7 +202,7 @@ async function requestCameraStream(signal) {
 
   // Pokud už má origin oprávnění, enumerateDevices() obvykle vrátí i názvy
   // zařízení a můžeme spektrometr otevřít rovnou podle labelContains.
-  let matchingDevice = await findProfileVideoInput();
+  let matchingDevice = await findProfileVideoInput(signal);
   if (matchingDevice) return openCameraDevice(matchingDevice.deviceId,signal);
 
   // Před prvním povolením kamery jsou labely z privacy důvodů prázdné.
@@ -218,13 +214,13 @@ async function requestCameraStream(signal) {
   if (!expected || labelMatchesProfile(probeTrack?.label ?? "")) return probeStream;
 
   try {
-    matchingDevice = await findProfileVideoInput();
+    matchingDevice = await findProfileVideoInput(signal);
     if (matchingDevice) {
       stopStream(probeStream);
       return await openCameraDevice(matchingDevice.deviceId,signal);
     }
 
-    const devices = await videoInputs();
+    const devices = await videoInputs(signal);
     const available = devices
       .map((device) => device.label || "nepojmenovaná kamera")
       .join(", ");
@@ -245,6 +241,9 @@ async function selectBestCaptureProfile(track,signal) {
       return profile;
     } catch (error) {
       if (error.name === "AbortError" || signal.aborted) throw error;
+      // A timed-out native request is still running. A fallback could be
+      // overwritten by its late completion, so close this track instead.
+      if (error.name === "TimeoutError") throw error;
       console.warn(`Capture profile ${profile.id} is unavailable.`, error);
     }
   }
@@ -418,7 +417,7 @@ function createNumericControl(name, labelText, capability, value) {
 
 export async function applyTrackConstraint(name,value) {
   const track = state.track;
-  if (!state.measurementReady || !Number.isFinite(value) || !NUMERIC_CONTROLS.some(([key])=>key===name)) return;
+  if (!state.measurementReady || state.dragStart || !Number.isFinite(value) || !NUMERIC_CONTROLS.some(([key])=>key===name)) return;
   try {
     await cameraOperations.run("manual",async ({signal}) => {
       const range = name === "exposureTime" ? measurementExposureRange() : state.capabilities[name];

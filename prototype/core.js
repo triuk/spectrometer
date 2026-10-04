@@ -110,14 +110,15 @@ export function setControlStatus(text, isError = false) {
 
 export function setRunningControls(running = Boolean(state.track)) {
   const busy = Boolean(cameraOperations.active) || state.starting;
+  const editingRoi = Boolean(state.dragStart);
   const measuring = running && state.measurementReady;
   const hasData = measuring && Boolean(state.averagedSpectrum) && !busy && !state.dragStart;
   elements.startButton.disabled = running || busy;
   elements.stopButton.disabled = !running && !state.starting;
-  elements.autoModeButton.disabled = !measuring || busy || !state.capabilities.exposureTime;
-  elements.manualModeButton.disabled = !measuring || busy;
+  elements.autoModeButton.disabled = !measuring || busy || editingRoi || !state.capabilities.exposureTime;
+  elements.manualModeButton.disabled = !measuring || busy || editingRoi;
   elements.captureDarkButton.disabled = !hasData;
   elements.exportCsvButton.disabled = !hasData;
   elements.saveFrameButton.disabled = !measuring || busy;
-  for (const input of elements.cameraControls.querySelectorAll("input, select")) input.disabled = !measuring || busy;
+  for (const input of elements.cameraControls.querySelectorAll("input, select")) input.disabled = !measuring || busy || editingRoi;
 }

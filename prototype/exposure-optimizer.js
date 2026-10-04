@@ -286,6 +286,7 @@ async function optimizeGeneric(track, range, profile, samples, id, current) {
 }
 
 export async function optimizeExposure() {
+  if (state.dragStart) {setControlStatus("Dokončete výběr ROI před optimalizací expozice.",true); return;}
   try {
     await cameraOperations.run("optimize", async ({signal:id}) => {
       const track = state.track;

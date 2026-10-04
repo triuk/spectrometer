@@ -2,7 +2,7 @@ import {cameraOperations} from "./camera-operations.js";
 import {configureMeasurementCamera} from "./camera-constraints.js";
 import {startCamera,stopCamera} from "./camera.js";
 import {events,publish} from "./events.js";
-import { clamp, elements, setControlStatus, state, toFiniteNumber } from "./core.js";
+import { clamp, elements, state } from "./core.js";
 import { drawPlot, setRoi, calibration, resizeOverlay, invalidateMeasurement } from "./spectrum.js";
 
 import { normaliseProfile, validateProfile } from "./profile-schema.js";
@@ -222,16 +222,19 @@ function slug(text) {
 }
 
 function currentCalibrationPoints(base) {
+  if ([elements.pixel1,elements.pixel2,elements.wavelength1,elements.wavelength2].some(input=>input.value.trim()==="")) {
+    throw new Error("Před uložením profilu vyplňte oba kalibrační pixely a vlnové délky.");
+  }
   const previous = base?.calibration?.points ?? [];
   return [
     {
-      pixel: toFiniteNumber(elements.pixel1.value, 0),
-      wavelengthNm: toFiniteNumber(elements.wavelength1.value, 400),
+      pixel: Number(elements.pixel1.value),
+      wavelengthNm: Number(elements.wavelength1.value),
       label: previous[0]?.label ?? "Kalibrační bod 1",
     },
     {
-      pixel: toFiniteNumber(elements.pixel2.value, 1),
-      wavelengthNm: toFiniteNumber(elements.wavelength2.value, 700),
+      pixel: Number(elements.pixel2.value),
+      wavelengthNm: Number(elements.wavelength2.value),
       label: previous[1]?.label ?? "Kalibrační bod 2",
     },
   ];

@@ -43,4 +43,19 @@ Rozsah: osm bodů schváleného code review. Referenční zdroje, AGENTS a deplo
 
 Všech osm bodů bylo provedeno. uPlot stejné verze je nově přibalený s licencí, aby graf i testy fungovaly bez CDN. Integrační ověření zahrnuje reálný Canvas a uPlot, simulované snímky/tracky a import/export. Opraveny byly také regresním testem zachycené nulové hodnoty při exportu zastaveného profilu, nepřijetí constraints a orientace při sestupné kalibraci.
 
-Ověření: 12 Node testů, 16 browser kontrol, syntaxe modulů, čistý diff. USB-ZH není dostupný; praktická kontrola zůstává uvedená v HANDOFF.md. Změny jsou pouze lokální commity; push a deployment nebyly součástí zadání.
+Ověření po dodatečné kontrole: 15 Node testů, 24 browser kontrol, syntaxe modulů, čistý diff. USB-ZH není dostupný; praktická kontrola zůstává uvedená v HANDOFF.md. Změny jsou pouze lokální commity; push a deployment zatím neproběhly.
+
+## Dodatečná kontrola před push a deploymentem
+
+8. `fix: close camera cancellation and measurement gaps found in review` – opravy potvrzené regresními testy a aktualizace handoffu.
+
+- [x] Zrušit i čekání na enumeraci zařízení; nespouštět žádost o oprávnění po Stop.
+- [x] Zavřít stream doručený po timeoutu, i když volající mezitím pokračoval fallbackem.
+- [x] Po timeoutu nativního nastavení formátu zavřít track; nepřekrývat jej fallback požadavkem.
+- [x] Přerušení právě probíhajícího `applyConstraints` ukončí track, aby opožděná změna nepřepsala obnovenou expozici.
+- [x] Stop kamery ruší také obnovu expozice; běžné zastavení diagnostiky během čekání na snímky expozici obnoví a kameru zachová.
+- [x] Výběr ROI blokuje optimizer, diagnostiku a ruční změny v UI i v jejich vstupních funkcích.
+- [x] Známý automatický režim není přijat jako ruční měření ani při neúplných capabilities.
+- [x] Export profilu odmítá neúplné kalibrační body; shrnutí diagnostiky se po dokončení zobrazí.
+
+Původní browser testy prošly před kontrolou. Nové regresní kontroly nejprve zachytily chyby v ROI, enumeraci, timeoutu formátu, přerušení/obnově expozice, automatických režimech a prázdném kalibračním pixelu; po opravách všechny procházejí.

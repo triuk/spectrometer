@@ -22,8 +22,28 @@ export function createOperationController(onChange = () => {}) {
   };
 }
 export const cameraOperations = createOperationController(operation => publish('camera-operation', operation?.kind ?? null));
+export async function acquireMediaStream(request, {signal, timeoutMs = 30000} = {}) {
+  if (signal?.aborted) throw abortError();
+  let abandoned = false;
+  const pending = Promise.resolve().then(() => {
+    if (signal?.aborted) throw abortError();
+    return request();
+  }).then(stream => {
+    if (abandoned || signal?.aborted) {
+      stream.getTracks().forEach(track => track.stop());
+      throw abortError();
+    }
+    return stream;
+  });
+  try { return await abortable(pending, signal, timeoutMs); }
+  catch (error) { abandoned = true; throw error; }
+}
 export function abortable(promise, signal, timeoutMs = 5000) {
-  if (signal?.aborted) return Promise.reject(abortError());
+  if (signal?.aborted) {
+    // Native requests may already exist; always consume their eventual rejection.
+    Promise.resolve(promise).catch(() => {});
+    return Promise.reject(abortError());
+  }
   return new Promise((resolve, reject) => {
     const finish = (callback, value) => {
       clearTimeout(timer);
