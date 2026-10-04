@@ -41,7 +41,7 @@ Výsledek lze exportovat jako JSON nebo CSV. JSON obsahuje i souhrnnou analýzu 
 
 ## Graf spektra
 
-Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkrétní verzi; při nedostupnosti CDN zůstává jako fallback původní Canvas graf.
+Interaktivní graf používá **uPlot 1.6.32**. Knihovna je připnutá na konkrétní verzi; je přibalená ve složce `vendor/` včetně MIT licence. Při chybě načtení nebo vykreslení zůstává jako fallback Canvas graf.
 
 - tažením levým tlačítkem se přiblíží vybraný rozsah osy X;
 - kolečkem se zoomuje kolem kurzoru;
@@ -68,3 +68,15 @@ Vlnová délka kalibračního bodu se záměrně nedoplňuje automaticky: uživa
 ## Spuštění
 
 Prohlížeč musí stránku načítat přes HTTPS nebo z `localhost`. Nasazení projektu zajišťuje GitLab Pages.
+
+
+## Platnost dat a řízení operací
+
+- Interval výpočtu omezuje četnost zpracování nových snímků; stejný snímek se do průměru nezapočítává opakovaně.
+- ROI se mění atomicky při dokončení výběru. Změna podmínek ruší průměr i pozadí.
+- Optimalizace, diagnostika a ruční změny se nepřekrývají. Stop/odpojení ruší čekání; chybějící snímek nebo nepotvrzené nastavení zastaví akvizici s hlášením.
+- Kalibrace obsahuje `captureMode` a volitelný stav `valid`. Nesoulad rozlišení vypne osu v nm; nové body se potvrzují tlačítkem **Použít kalibraci pro tento režim**. Automatické přepočítání bodů by předpokládalo neověřenou geometrii.
+- Graf dostává aktualizace přímo. Canvas se při aktivním uPlotu nevykresluje. I sestupná kalibrace zachovává stejnou stranu náhledu a grafu.
+- Změna aktivního profilu za běhu kameru znovu otevře a kompletně inicializuje podle nového profilu.
+
+Testy se spouštějí z kořene repozitáře pomocí `npm test` a `npm run test:browser`. Viz [../WORK_PLAN.md](../WORK_PLAN.md).

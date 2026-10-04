@@ -26,25 +26,35 @@ export async function applyImageConstraints(track, values, signal) {
     clearProcessingState();
     if (state.darkSpectrum) clearDarkSpectrum();
   }
-  await abortable(track.applyConstraints({advanced:[values]}),signal);
-  if (track !== state.track || signal?.aborted) throw abortError();
-  const settings = track.getSettings();
-  for (const [key,value] of Object.entries(values)) {
-    const actual = settings[key];
-    const tolerance = Math.max((state.capabilities[key]?.step ?? 1)/2,0.01);
-    if (actual === undefined || (typeof value === 'number' ? !Number.isFinite(actual) || Math.abs(actual-value)>tolerance : actual !== value)) {
-      throw new Error(`Kamera nepotvrdila ${key}=${value}; hlásí ${actual ?? '?'}.`);
+  try {
+    await abortable(track.applyConstraints({advanced:[values]}),signal);
+    if (track !== state.track || signal?.aborted) throw abortError();
+    const settings = track.getSettings();
+    for (const [key,value] of Object.entries(values)) {
+      const actual = settings[key];
+      const tolerance = Math.max((state.capabilities[key]?.step ?? 1)/2,0.01);
+      if (actual === undefined || (typeof value === 'number' ? !Number.isFinite(actual) || Math.abs(actual-value)>tolerance : actual !== value)) {
+        throw new Error(`Kamera nepotvrdila ${key}=${value}; hlásí ${actual ?? '?'}.`);
+      }
     }
+    publish('camera-settings',settings);
+    return settings;
+  } catch (error) {
+    if (error.name !== 'AbortError' && track === state.track) publish('capture-error',error);
+    throw error;
   }
-  publish('camera-settings',settings);
-  return settings;
 }
 
 export async function settleCamera(track, signal) {
   const count = state.instrumentProfile?.exposureOptimization?.freshFrames ?? 5;
-  for (let index=0;index<count;index++) {
-    await waitForVideoFrame(elements.video,{signal,track});
-    if (track !== state.track || signal?.aborted) throw abortError();
+  try {
+    for (let index=0;index<count;index++) {
+      await waitForVideoFrame(elements.video,{signal,track});
+      if (track !== state.track || signal?.aborted) throw abortError();
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError' && track === state.track) publish('capture-error',error);
+    throw error;
   }
 }
 export async function configureMeasurementCamera(profile, signal) {

@@ -13,8 +13,6 @@ import {
 } from "./core.js";
 import {
   clearOverlay,
-  clearProcessingState,
-  drawEmptyPlot,
   invalidateMeasurement,
   drawPlot,
   initialiseCaptureSurface,

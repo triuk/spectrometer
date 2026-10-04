@@ -31,9 +31,16 @@ Rozsah: osm bodů schváleného code review. Referenční zdroje, AGENTS a deplo
 ## Stav
 
 - [x] Plán a kontrola výchozí větve / hardwaru.
-- [ ] Profily a společné výpočty.
-- [ ] Výhradní operace a rušení.
-- [ ] Platnost měření a nové snímky.
-- [ ] Jednotná inicializace.
-- [ ] Jediný renderer bez pollingu.
-- [ ] Integrační ověření a dokumentace.
+- [x] Profily a společné výpočty.
+- [x] Výhradní operace a rušení.
+- [x] Platnost měření a nové snímky.
+- [x] Jednotná inicializace.
+- [x] Jediný renderer bez pollingu.
+- [x] Integrační ověření a dokumentace.
+
+
+## Výsledek
+
+Všech osm bodů bylo provedeno. uPlot stejné verze je nově přibalený s licencí, aby graf i testy fungovaly bez CDN. Integrační ověření zahrnuje reálný Canvas a uPlot, simulované snímky/tracky a import/export. Opraveny byly také regresním testem zachycené nulové hodnoty při exportu zastaveného profilu, nepřijetí constraints a orientace při sestupné kalibraci.
+
+Ověření: 12 Node testů, 16 browser kontrol, syntaxe modulů, čistý diff. USB-ZH není dostupný; praktická kontrola zůstává uvedená v HANDOFF.md. Změny jsou pouze lokální commity; push a deployment nebyly součástí zadání.

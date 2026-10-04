@@ -244,6 +244,11 @@ function processFrame(frame) {
       || elements.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return false;
   const started = performance.now();
   const context = captureConditions();
+  for (const name of ["exposureMode","whiteBalanceMode"]) {
+    if (state.capabilities[name]?.includes("manual") && context.cameraSettings[name] !== "manual") {
+      publish("capture-error",new Error(`Kamera opustila ruční ${name}. Spusťte ji znovu.`)); return false;
+    }
+  }
   const key = measurementKey(context);
   if (key !== state.measurementKey) invalidateMeasurement();
   captureContext.drawImage(elements.video,0,0,elements.captureCanvas.width,elements.captureCanvas.height);
@@ -337,7 +342,7 @@ export function confirmCalibration() {
   const width = elements.video.videoWidth || state.instrumentProfile?.camera.width;
   const height = elements.video.videoHeight || state.instrumentProfile?.camera.height;
   const points = calibrationPoints();
-  if (!linearCalibration(points) || points.some(point=>point.pixel<0 || point.pixel>width-1)) {
+  if ([elements.pixel1,elements.pixel2,elements.wavelength1,elements.wavelength2].some(input=>input.value.trim()==="") || !linearCalibration(points) || points.some(point=>point.pixel<0 || point.pixel>width-1)) {
     elements.calibrationStatus.textContent = "Zadejte dva platné odlišné body uvnitř aktuálního senzoru.";
     return;
   }
@@ -357,8 +362,8 @@ function wavelength(roiPixel) {
 
 function displayIsReversed(count) {
   if (count < 2) return false;
-  const first = wavelength(0) ?? spectralSensorPixel(0);
-  const last = wavelength(count - 1) ?? spectralSensorPixel(count - 1);
+  const first = spectralSensorPixel(0);
+  const last = spectralSensorPixel(count - 1);
   return first > last;
 }
 

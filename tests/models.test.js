@@ -31,6 +31,7 @@ test('invalid dimensions, nulls, ROI, calibration and optimizer are rejected', (
     p => p.schemaVersion = 2, p => p.sensorOrientation.flipX = 'true']) {
     const candidate = profile(); mutate(candidate); assert.throws(() => normaliseProfile(candidate));
   }
+  const legacy=profile();delete legacy.sensorOrientation;legacy.calibration.points[0].pixel=null;assert.throws(()=>normaliseProfile(legacy));
   assert.equal(validateProfile(normaliseProfile(profile())).id, 'lgs-default');
 });
 test('RGB extraction, temporal mean and dark subtraction agree numerically', () => {

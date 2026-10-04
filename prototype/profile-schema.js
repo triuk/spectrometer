@@ -54,6 +54,8 @@ export function normaliseProfile(profile) {
   if (!profile || typeof profile !== 'object' || Array.isArray(profile) || profile.schemaVersion !== 1) return validateProfile(profile);
   const result = structuredClone(profile);
   const width = result.camera?.width;
+  if (result.roi && ![result.roi.x,result.roi.y,result.roi.width,result.roi.height].every(integer)) fail('ROI musí používat číselné celočíselné souřadnice.');
+  if (Array.isArray(result.calibration?.points) && result.calibration.points.some(point=>!point || !finite(point.pixel) || !finite(point.wavelengthNm))) fail('Kalibrační body musí být čísla.');
   if (result.sensorOrientation === undefined) {
     if (!Number.isSafeInteger(width) || width < 1) fail('Migrace starého profilu vyžaduje platnou šířku senzoru.');
     result.sensorOrientation = { flipX: true };

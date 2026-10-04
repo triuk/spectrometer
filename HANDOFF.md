@@ -162,7 +162,7 @@ Poznámka: V4L2 `exposure_dynamic_framerate` byl na zařízení pozorován jako 
 
 ## Graf spektra
 
-Interaktivní graf je v `prototype/uplot-spectrum.js` a používá **uPlot 1.6.32** z připnutého CDN URL.
+Interaktivní graf je v `prototype/uplot-spectrum.js` a používá **uPlot 1.6.32** přibalený v `prototype/vendor/uplot-1.6.32/` včetně MIT licence. CDN není potřeba.
 
 Funkce:
 
@@ -179,27 +179,35 @@ Funkce:
 
 Detekce píků je zatím na **luminance**. Pokud budou důležité úzké červené/modré čáry, možné budoucí rozšíření je volba `luminance / max RGB / vybraný kanál`.
 
-Canvas graf v `spectrum.js` zůstává jako fallback, pokud se uPlot z CDN nenačte.
+Canvas graf v `spectrum.js` zůstává jako fallback při chybě načtení nebo vykreslení uPlotu. Aktivní je vždy pouze jeden renderer.
 
-## Důležité moduly
+## Aktuální architektura (4. října 2026)
 
-- `prototype/camera.js` – výběr kamery, device rediscovery, capture constraints, capabilities.
-- `prototype/spectrum.js` – frame processing, ROI, orientace, raw↔spectral X, dark subtraction, CSV/PNG.
-- `prototype/instrument-profiles.js` – načítání, migrace, ukládání/import/export profilů.
-- `prototype/exposure-optimizer.js` – aktuální SW optimalizátor expozice.
-- `prototype/exposure-diagnostics.js` – analytický sweep expozice.
-- `prototype/uplot-spectrum.js` – hlavní interaktivní graf a píky.
-- `prototype/configs/lgs-default.json` – výchozí profil cílového LGS.
-- `prototype/measurement-camera-mode.js` – pevný měřicí režim; obsahuje i starší optimalizační logiku, ale aktuální `exposure-optimizer.js` zachytává tlačítko dříve a starou optimalizaci nepouští.
+Bylo provedeno osm bodů code review podle [WORK_PLAN.md](WORK_PLAN.md). User výslovně schválil i refaktor; původní doporučení odložit jej do HW kontroly tím bylo překonáno. **Skutečný USB-ZH v této relaci nebyl připojen** (`/dev/video*` chyběly). Výsledky níže jsou softwarové kontroly a simulace, ne nové měření přístroje.
 
-## Známý technický dluh / opatrnost
+- `camera.js` má jedinou posloupnost: výběr kamery → formát → video metadata → profil/ROI/kalibrace → pevné ruční parametry → ověření skutečných hodnot → nové snímky → měření. Track `ended`, Stop, nečekaná změna rozlišení nebo nepotvrzené nastavení ukončí akvizici.
+- `camera-operations.js` poskytuje výhradní operace a AbortController. Optimalizace, diagnostika, start a ruční změna se nesmějí překrývat. Neúspěšná operace uvolní zámek; opožděný stream po zrušeném startu se zavře.
+- `camera-constraints.js` odděluje ImageCapture parametry od formátu, respektuje krok capabilities a profilový limit, ověřuje readback. Ruční změna a start čekají na profilový počet čerstvých snímků. Diagnostika obnovuje původní expozici před uvolněním zámku.
+- `video-frames.js` čeká na nový snímek s timeoutem/abortem a ruší callback/listenery. Fallback kontroluje posun `currentTime`.
+- `spectrum.js` zpracovává jedinečné video snímky. Interval je omezení výpočtu, nikoli generátor vzorků. Rozpracovaná ROI je v `state.pendingRoi`; měřicí `state.roi` se změní až při dokončení výběru. Pointer cancel výběr zahodí.
+- `measurement-context.js` identifikuje podmínky: relaci, kameru/profil, rozlišení, raw ROI, orientaci a obrazové parametry. Historie a pozadí platí pouze pro shodné podmínky. Export používá snapshot podmínek zpracovaných snímků, ne pozdější nastavení kamery.
+- `spectrum-model.js` sdílí numerické výpočty, kalibraci, odečet pozadí, souřadnice a CSV mezi grafy/exportem.
+- `profile-schema.js` striktně validuje čísla, rozměry, ROI, právě dva odlišné lineární kalibrační body a expoziční model; zachovává známé migrace raw → spectral.
+- Kalibrace obsahuje `calibration.captureMode: {width,height}` a volitelný `valid`. Starší profily zdědí referenční rozměry z `camera`. Při náhradním rozlišení zůstávají body původní, ale osa přejde na pixely. Nové body musí uživatel potvrdit pro aktuální režim. Stejné rozlišení samo o sobě neprokazuje nezměněnou optickou geometrii.
+- `instrument-profiles.js` už kameru nepolluje. Aktivace jiného profilu za běhu restartuje kameru; během operace/výběru ROI jsou akce profilu blokované. Export zachovává i nulové pevné parametry.
+- `image-settings.js` pouze synchronizuje ruční UI pomocí událostí. Nemění režim automaticky. Globální patch `MediaStreamTrack.prototype` a staré automatické/duplicitní moduly byly odstraněny.
+- `exposure-model.js` zachovává 32bodové úseky a jejich bezpečné konce, včetně kamer s krokem větším než 1. Samotný piecewise optimalizátor zůstává jednorázový.
+- `uplot-spectrum.js` dostává data přímo, nepolluje. Canvas nekreslí při aktivním uPlotu; při Stop se graf vymaže. Globální obsluhy interakcí se při zničení grafu odstraní. Sestupná kalibrace používá sestupnou osu, aby náhled a graf zachovaly stejnou stranu.
 
-- `spectrum.js` stále vykresluje legacy Canvas graf i v situaci, kdy je uPlot aktivní; je to zbytečná CPU práce.
-- `uplot-spectrum.js` zatím částečně duplikuje zpracování kalibrace/spektra místo sdílených helperů.
-- uPlot vrstva kontroluje stav pollingem; čistší by bylo přímé publikování nových spektrálních dat.
-- starší optimalizační kód v `measurement-camera-mode.js` by šel později odstranit, ale až po ověření aktuálního optimizeru na HW.
-- moduly `software-auto-exposure.js`, `software-auto-start.js` a `auto-mode-restart.js` nejsou součástí aktuálního řízení; znovu je nezapínej bez důvodu.
-- nedělej větší refaktor kritické akviziční vrstvy před praktickým ověřením aktuální orientace, ROI, USB rediscovery a expozice na GitLab Pages.
+## Ověření a zbývající omezení
+
+- `npm test`: 12 regresních kontrol (souřadnice/ROI, migrace a vadné profily, RGB/průměr/pozadí, kalibrace/CSV, 32bodové úseky a krok, identita měření, výhradní operace, abort/timeout/fallback snímků).
+- `npm run test:browser`: 16 integračních kontrol se simulovanou kamerou v **Chromiu 153.0.8010.36**. Ověřené byly rediscovery, ruční start, limit expozice, nové snímky, pozadí/ROI, dokončený optimizer, diagnostika/obnova, CSV/PNG, fallback kalibrace, opožděné oprávnění, skutečný uPlot/zoom/píky/kalibrační výběr, sestupná osa, Stop/odpojení, odmítnuté nastavení, permission probe a import/export profilu.
+- Node: **26.8.2**; testy nepotřebují npm závislosti. Browser runner používá lokální HTTP server a CDP. `SPECTROMETER_CHROMIUM` určuje binárku, `SPECTROMETER_SCREENSHOT` volitelný PNG snímek UI.
+- Syntaxe aktivních JS modulů a `git diff --check` byly ověřeny.
+- Expoziční maxima, 32bodová odezva, ustálení, fyzická orientace a USB topologie nebyly nově ověřeny. Dřívější naměřené údaje výše zůstávají referencí.
+- Stejné labely několika kamer bez sériového čísla nelze automaticky považovat za jednoznačnou identitu. Matching pravidla zůstávají původní; toto vyžaduje praktické rozhodnutí při rozšíření na více přístrojů.
+- Jasové píky, dvoubodová kalibrace a serverové ukládání profilů mají původní rozsah; radiometrická kalibrace ani backend nebyly přidány.
 
 ## Co je potřeba ověřit na reálném HW
 

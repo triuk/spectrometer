@@ -279,10 +279,10 @@ function buildCurrentProfile({ id, name }) {
     cameraSettings: {
       whiteBalance: Number(cameraSettings.colorTemperature) || Number(base.cameraSettings?.whiteBalance) || 4600,
       exposureMax: Number(base.cameraSettings?.exposureMax) || 1800,
-      brightness: Number.isFinite(Number(cameraSettings.brightness)) ? Number(cameraSettings.brightness) : Number(base.cameraSettings?.brightness) || 0,
-      contrast: Number.isFinite(Number(cameraSettings.contrast)) ? Number(cameraSettings.contrast) : Number(base.cameraSettings?.contrast) || 32,
-      saturation: Number.isFinite(Number(cameraSettings.saturation)) ? Number(cameraSettings.saturation) : Number(base.cameraSettings?.saturation) || 50,
-      sharpness: Number.isFinite(Number(cameraSettings.sharpness)) ? Number(cameraSettings.sharpness) : Number(base.cameraSettings?.sharpness) || 1,
+      brightness: Number.isFinite(cameraSettings.brightness) ? cameraSettings.brightness : base.cameraSettings?.brightness ?? 0,
+      contrast: Number.isFinite(cameraSettings.contrast) ? cameraSettings.contrast : base.cameraSettings?.contrast ?? 32,
+      saturation: Number.isFinite(cameraSettings.saturation) ? cameraSettings.saturation : base.cameraSettings?.saturation ?? 50,
+      sharpness: Number.isFinite(cameraSettings.sharpness) ? cameraSettings.sharpness : base.cameraSettings?.sharpness ?? 1,
     },
     exposureOptimization: base.exposureOptimization ? clone(base.exposureOptimization) : undefined,
   });
@@ -318,7 +318,9 @@ async function saveCurrentLocally() {
 }
 
 async function importProfile(file) {
+  if (cameraOperations.active || state.dragStart) throw new Error("Dokončete operaci kamery nebo ROI před importem.");
   const profile = validateProfile(normaliseProfile(JSON.parse(await file.text())));
+  if (cameraOperations.active || state.dragStart) throw new Error("Dokončete operaci kamery nebo ROI před importem.");
   localProfiles.set(profile.id, profile);
   persistLocalProfiles();
   await activate(profile, "local", true);

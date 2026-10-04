@@ -34,6 +34,7 @@ let resizeObserver = null;
 let interactionController = null;
 let lastSignature = "";
 let chartCalibrated = false;
+let chartDirection = 1;
 let fullDomain = null;
 let tooltip = null;
 let background = null;
@@ -228,6 +229,7 @@ function makeChartData(spectrum,currentCalibration) {
     data,
     sensorPixels,
     calibrated: Boolean(currentCalibration),
+    direction: currentCalibration?.slope < 0 ? -1 : 1,
     domain: length ? [data[0][0], data[0][length - 1]] : null,
   };
 }
@@ -283,8 +285,8 @@ function spectralGradient(min, max, alpha) {
 
 function updateSpectralLayers(u) {
   if (!background || !colorStrip) return;
-  const min = Number(u.scales.x.min);
-  const max = Number(u.scales.x.max);
+  const min = Number(u.scales.x.dir === -1 ? u.scales.x.max : u.scales.x.min);
+  const max = Number(u.scales.x.dir === -1 ? u.scales.x.min : u.scales.x.max);
   if (!chartCalibrated) {
     background.style.background = "none";
     colorStrip.style.background = "none";
@@ -607,7 +609,7 @@ function installInteractions(u) {
 
     if (event.shiftKey) {
       const direction = Math.sign(event.deltaY || event.deltaX);
-      const delta = direction * span * 0.12;
+      const delta = direction * span * 0.12 * chartDirection;
       const [nextMin, nextMax] = clampDomain(min + delta, max + delta);
       u.setScale("x", { min: nextMin, max: nextMax });
       return;
@@ -615,7 +617,7 @@ function installInteractions(u) {
 
     const rect = over.getBoundingClientRect();
     const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
-    const anchor = min + span * fraction;
+    const anchor = min + span * (chartDirection === -1 ? 1-fraction : fraction);
     const factor = event.deltaY < 0 ? 0.8 : 1.25;
     const minimumSpan = Math.max((fullDomain[1] - fullDomain[0]) / 500, Number.EPSILON);
     let nextMin = anchor - (anchor - min) * factor;
@@ -645,7 +647,7 @@ function installInteractions(u) {
     if (!panning || !chart || chart !== u) return;
     event.preventDefault();
     const span = panning.max - panning.min;
-    const delta = -(event.clientX - panning.startX) / panning.width * span;
+    const delta = -(event.clientX - panning.startX) / panning.width * span * chartDirection;
     const [min, max] = clampDomain(panning.min + delta, panning.max + delta);
     u.setScale("x", { min, max });
   }, {signal});
@@ -660,9 +662,10 @@ function installInteractions(u) {
   }, {signal});
 }
 
-function createChart(uPlotClass, data, calibrated) {
+function createChart(uPlotClass, data, calibrated, direction) {
   ensureHost();
   chartCalibrated = calibrated;
+  chartDirection = direction;
   host.replaceChildren(emptyState);
   emptyState.hidden = true;
 
@@ -671,7 +674,7 @@ function createChart(uPlotClass, data, calibrated) {
     width: Math.max(320, Math.round(host.clientWidth)),
     height: Math.max(240, Math.round(host.clientHeight)),
     scales: {
-      x: { time: false },
+      x: { time: false, dir:direction },
       y: { range: (_u, _min, max) => [0, Math.max(1, Math.min(255, max * 1.10))] },
     },
     axes: [
@@ -765,11 +768,11 @@ function renderCurrentSpectrum(uPlotClass,spectrum,currentCalibration) {
     prepared.data[0].length,
   ].join(":");
 
-  if (!chart || chartCalibrated !== prepared.calibrated) {
+  if (!chart || chartCalibrated !== prepared.calibrated || chartDirection !== prepared.direction) {
     clearChart();
     fullDomain = prepared.domain;
     currentSensorPixels = prepared.sensorPixels;
-    createChart(uPlotClass, prepared.data, prepared.calibrated);
+    createChart(uPlotClass, prepared.data, prepared.calibrated, prepared.direction);
     lastSignature = signature;
     return;
   }

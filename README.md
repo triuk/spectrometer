@@ -12,7 +12,7 @@ Pro nové ChatGPT/Codex vlákno nejdřív přečti [AGENTS.md](AGENTS.md) a poto
 - profily konkrétních spektrometrů s kamerou, ROI a kalibrací;
 - zobrazení R, G, B a jasového spektra;
 - ruční nastavení kamery a jednorázová SW optimalizace expozice;
-- průměrování snímků a odečet tmavého spektra;
+- průměrování skutečně nových snímků a odečet pozadí při shodných podmínkách měření;
 - dvoubodová kalibrace pixel–vlnová délka;
 - export CSV, profilu JSON a snímku PNG.
 
@@ -35,3 +35,27 @@ Kamera při měření používá pevné ruční nastavení. Jas, kontrast, satur
 Chromium nezpřístupňuje použitý V4L2 pixelový formát ani všechny interní úpravy obrazu ve firmwaru kamery. Projekt je zatím prototyp a výsledky je nutné ověřovat kalibrací a referenčními měřeními.
 
 Referenční zdrojové kódy jsou ve složce `externalSources/` a nemají se upravovat.
+
+
+## Platnost měření
+
+Optimalizace, diagnostika, změny parametrů a spuštění kamery mají výhradní přístup ke kameře. Zastavení nebo odpojení ruší čekající operace; čekání na nový snímek má časový limit. Kamera zahájí měření až po aplikaci a ověření ručního profilu a příchodu nových snímků.
+
+ROI se potvrzuje při dokončení výběru. Změna ROI, režimu snímání nebo obrazových parametrů ruší dosavadní průměr i pozadí. CSV obsahuje podmínky skutečně zpracovaných snímků.
+
+Kalibrace je vázaná na rozlišení (`calibration.captureMode`). Při náhradním rozlišení se automaticky neškáluje: graf přejde na pixely. Zadejte odpovídající kalibrační body a stiskněte **Použít kalibraci pro tento režim**. Profil exportovaný z náhradního režimu uchová původní rozlišení kalibrace a její neaktivní stav.
+
+uPlot 1.6.32 je přibalený v `prototype/vendor/` s MIT licencí. Graf nevyžaduje CDN a při jeho chybě funguje Canvas fallback. Vykresluje se pouze aktivní varianta.
+
+## Vývoj a testy
+
+Plán a stav logických commitů: [WORK_PLAN.md](WORK_PLAN.md).
+
+```bash
+npm test
+npm run test:browser
+```
+
+Testy nepotřebují instalovat npm balíčky. Node testy ověřují numerické výpočty, migraci/validaci profilů a řízení operací. Integrační test spustí lokální HTTP server a headless Chromium se simulovanou kamerou; ověřuje i skutečný uPlot, PNG/CSV export a odpojení. Ověřené prostředí: Node 26.8.2 a Chromium 153.0.8010.36. Cestu k jinému Chromiu lze zadat proměnnou `SPECTROMETER_CHROMIUM`.
+
+Simulace neověřuje expoziční odezvu, geometrii ani USB připojení skutečného USB-ZH. Praktické kroky jsou v handoffu.

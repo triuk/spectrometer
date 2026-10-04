@@ -339,6 +339,8 @@ async function runDiagnosticSweep(signal) {
 
   const track = state.track;
   const originalExposure = Number(track.getSettings().exposureTime);
+  const originalCapabilities = structuredClone(state.capabilities);
+  const originalProfile = state.instrumentProfile ? {id:state.instrumentProfile.id,name:state.instrumentProfile.name} : null;
   const startedAt = new Date().toISOString();
   const points = [];
   running = true;
@@ -375,11 +377,11 @@ async function runDiagnosticSweep(signal) {
       startedAt,
       completedAt: new Date().toISOString(),
       stopped: stopRequested || signal.aborted || track !== state.track,
-      profile: state.instrumentProfile ? { id: state.instrumentProfile.id, name: state.instrumentProfile.name } : null,
+      profile: originalProfile,
       camera: {
         label: track.label,
         settings: track.getSettings(),
-        capabilities: state.capabilities,
+        capabilities: originalCapabilities,
       },
       roi,
       config: {
@@ -524,7 +526,7 @@ function createUi() {
   ui.stop.addEventListener("click", () => {
     stopRequested = true;
     if (cameraOperations.active?.kind === "diagnostics") cameraOperations.cancel();
-    ui.status.textContent = "Zastavuji po aktuálním snímku…";
+    ui.status.textContent = "Zastavuji a obnovuji expozici…";
   });
   ui.exportJson.addEventListener("click", exportJson);
   ui.exportCsv.addEventListener("click", exportCsv);
