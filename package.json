@@ -1,0 +1,9 @@
+{
+  "name": "web-spectrometer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/*.test.js",
+    "test:browser": "node tests/browser-runner.js"
+  }
+}

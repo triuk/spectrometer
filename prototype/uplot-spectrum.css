@@ -1,0 +1,218 @@
+.spectrum-uplot-host {
+  position: relative;
+  display: none;
+  width: 100%;
+  height: 330px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #080d15;
+}
+
+.spectrum-uplot-host .uplot {
+  font-family: inherit;
+}
+
+.spectrum-uplot-host .u-wrap {
+  background: #080d15;
+}
+
+.spectrum-uplot-host .u-under,
+.spectrum-uplot-host .u-over {
+  overflow: hidden;
+}
+
+.spectrum-background,
+.spectrum-color-strip,
+.spectrum-peak-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.spectrum-background {
+  opacity: 1;
+}
+
+.spectrum-color-strip {
+  top: auto;
+  height: 13px;
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+  opacity: 0.92;
+}
+
+.spectrum-peak-layer {
+  z-index: 8;
+  overflow: hidden;
+}
+
+.spectrum-peak-marker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.spectrum-peak-dot {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgb(255 255 255 / 0.92);
+  border-radius: 50%;
+  background: rgb(8 13 21 / 0.92);
+  box-shadow: 0 0 0 2px rgb(8 13 21 / 0.48);
+}
+
+.spectrum-peak-stem {
+  position: absolute;
+  left: 0;
+  top: -15px;
+  width: 1px;
+  height: 13px;
+  background: rgb(255 255 255 / 0.55);
+}
+
+.spectrum-peak-label {
+  position: absolute;
+  left: 0;
+  bottom: 18px;
+  transform: translateX(-50%);
+  border: 1px solid rgb(151 169 189 / 0.38);
+  border-radius: 5px;
+  padding: 0.1rem 0.28rem;
+  background: rgb(8 13 21 / 0.86);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  font-size: 0.66rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.spectrum-peak-marker:hover .spectrum-peak-label,
+.spectrum-peak-marker:focus-visible .spectrum-peak-label {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.spectrum-tooltip {
+  position: absolute;
+  z-index: 12;
+  min-width: 138px;
+  max-width: 220px;
+  border: 1px solid rgb(151 169 189 / 0.42);
+  border-radius: 7px;
+  padding: 0.42rem 0.5rem;
+  background: rgb(8 13 21 / 0.94);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.spectrum-tooltip[hidden] {
+  display: none;
+}
+
+.spectrum-tooltip strong {
+  display: block;
+  margin-bottom: 0.18rem;
+}
+
+.spectrum-tooltip strong small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.spectrum-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.spectrum-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.spectrum-chart-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.spectrum-chart-actions .button {
+  min-height: 2rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.spectrum-peak-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.spectrum-inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.spectrum-inline-control input {
+  width: auto;
+  min-height: auto;
+}
+
+.spectrum-sensitivity-control select {
+  width: auto;
+  min-width: 6rem;
+  min-height: 1.9rem;
+  padding: 0.2rem 0.38rem;
+  font-size: 0.75rem;
+}
+
+.spectrum-calibration-button {
+  min-height: 1.9rem;
+  padding: 0.25rem 0.48rem;
+  font-size: 0.72rem;
+}
+
+.spectrum-calibration-button.active {
+  border-color: var(--accent);
+  background: rgb(83 200 255 / 0.13);
+  color: #fff;
+}
+
+.spectrum-peak-status {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.spectrum-interaction-hint {
+  margin-top: 0.45rem;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
